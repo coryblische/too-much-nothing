@@ -110,6 +110,10 @@ Panel {
   readonly property bool shownInEar: pendingInEar >= 0 ? pendingInEar === 1 : inEar
   readonly property int shownBassLevel: pendingBassLevel > 0 ? pendingBassLevel : bassLevel
   property string lastError: ""
+  // The audio controls at the bottom: shown or folded away. Kept while the
+  // shell runs, so the panel reopens the way it was left.
+  property bool audioOpen: false
+  readonly property alias audio: audioSection
   // Find asks first: the tone is loud enough to hurt a bud still in an ear.
   property bool ringConfirmOpen: false
 
@@ -524,6 +528,16 @@ Panel {
     codecProc.start(root.cmd(["set", "codec", String(name)]))
   }
 
+  // Unfold and bring the section into view, or fold it.
+  function toggleAudio() {
+    root.audioOpen = !root.audioOpen
+    if (root.audioOpen) Qt.callLater(function() {
+      var maxY = Math.max(0, panelFlick.contentHeight - panelFlick.height)
+      panelFlick.contentY = Math.min(maxY, audioToggle.y)
+    })
+    else audioSection.cursorActive = false
+  }
+
   function stopAll() {
     var ps = [listProc, selectProc, probeProc, earctlProc, bootstrapProc, statusProc, setProc,
               ringProc, unringProc, linkProc, latencyProc, inEarProc,
@@ -866,8 +880,9 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(380))
-    // Past this the card scrolls. 520 clipped the action buttons.
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(640))
+    // Past this the card scrolls. 520 clipped the action buttons. The audio
+    // controls get more room when unfolded.
+    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(root.audioOpen ? 900 : 640))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -878,10 +893,26 @@ Panel {
         else root.switchPanel(direction)
       }
       onMoveRequested: function(dx, dy) {
-        if (root.ringConfirmOpen && dx !== 0) ringConfirm.selectedIndex = ringConfirm.selectedIndex === 0 ? 1 : 0
+        if (root.ringConfirmOpen) {
+          if (dx !== 0) ringConfirm.selectedIndex = ringConfirm.selectedIndex === 0 ? 1 : 0
+          return
+        }
+        // The arrows and h/j/k/l drive the audio controls, as in omarchy.audio.
+        if (!root.audioOpen) return
+        if (!audioSection.cursorActive) { audioSection.enterFromAbove(); return }
+        if (dy !== 0) {
+          if (!audioSection.moveCursor(dy)) {
+            audioSection.cursorActive = false
+            panelFlick.contentY = Math.max(0, audioToggle.y - panelFlick.height / 2)
+          }
+        }
+        else if (dx !== 0) audioSection.adjustVolume(dx * 0.05)
       }
       onActivateRequested: {
-        if (!root.ringConfirmOpen) return
+        if (!root.ringConfirmOpen) {
+          if (root.audioOpen && audioSection.cursorActive) audioSection.activateCursor()
+          return
+        }
         if (ringConfirm.selectedIndex === 0) root.cancelRing()
         else root.ring()
       }
@@ -897,6 +928,9 @@ Panel {
         else if (t === "i" || t === "I") root.setInEar(!root.inEar)
         else if ((t === "b" || t === "B") && root.hasEnhancedBass) root.setEnhancedBass(!root.enhancedBass)
         else if ((t === "s" || t === "S") && root.hasSpatial) root.setSpatial(!root.spatialFixed)
+        else if ((t === "a" || t === "A")) root.toggleAudio()
+        // m mutes under the audio cursor while it is active, else Super Mic.
+        else if ((t === "m" || t === "M") && root.audioOpen && audioSection.cursorActive) audioSection.muteCursor()
         else if ((t === "m" || t === "M") && root.hasSuperMic) root.setSuperMic(!root.superMic)
       }
 
@@ -1433,6 +1467,32 @@ Panel {
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
             wrapMode: Text.WordWrap
+          }
+
+          // System audio, independent of the buds: the omarchy.audio
+          // controls, folded away until asked for.
+          Button {
+            id: audioToggle
+            width: parent.width
+            text: root.audioOpen ? "Hide audio (a)" : "Audio (a)"
+            iconText: root.audioOpen ? "󰅃" : "󰅀"
+            tooltipText: root.audioOpen ? "Fold the audio controls away" : "Volume, outputs, inputs and per-app mixer"
+            bordered: true
+            foreground: root.foreground
+            accent: root.foreground
+            fontFamily: root.fontFamily
+            onClicked: root.toggleAudio()
+          }
+
+          AudioSection {
+            id: audioSection
+            visible: root.audioOpen
+            width: parent.width
+            bar: root.bar
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            active: root.opened && root.audioOpen
+            flick: panelFlick
           }
         }
       }

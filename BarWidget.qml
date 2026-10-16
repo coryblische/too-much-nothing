@@ -104,9 +104,16 @@ Ui.BarWidget {
             ? Model.summary(panelLoader.item.state)
             : "No earbuds paired"))
 
+    // Right-click and the wheel act on system audio, as on omarchy.audio's
+    // icon, so that widget can be turned off.
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.MiddleButton) root.refresh()
+      else if (buttonCode === Qt.RightButton) { if (panelLoader.item) panelLoader.item.audio.toggleAllMuted() }
       else root.toggle()
+    }
+
+    onWheelMoved: function(delta) {
+      if (panelLoader.item) panelLoader.item.audio.wheel(delta)
     }
   }
 }

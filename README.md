@@ -21,6 +21,13 @@ Buds 2.
 - Connect and disconnect the buds from the panel header.
 - Find my buds. It asks first, since the tone is loud enough to hurt a bud
   still in an ear. The tone stops itself after 8 seconds.
+- System audio, folded away under an "Audio" button at the bottom (or `a`):
+  the same controls as Omarchy's audio panel. A mute switch, output volume
+  and device picker, input volume with a level meter and device picker, and
+  a per-app mixer. Arrows or h/j/k/l move through them, Enter picks, `m`
+  mutes. Scrolling on the bar icon changes the volume with the on-screen
+  display, and right-click mutes, as on Omarchy's audio icon. With these
+  here you can turn `omarchy.audio` off and keep one icon.
 
 Developed against CMF Buds 2 (B179). Other Nothing and CMF models speak the
 same protocol on a different RFCOMM channel. The panel probes for the right
@@ -278,8 +285,9 @@ MIT. See [LICENSE](LICENSE).
 
 The bundled [Phosphor Icons](https://phosphoricons.com) path data is also MIT.
 Its notice is in [licenses/phosphor-LICENSE](licenses/phosphor-LICENSE).
-`ConfirmCard.qml` is adapted from the Omarchy shell's ConfirmDialog, MIT,
-with its notice in [licenses/omarchy-LICENSE](licenses/omarchy-LICENSE).
+`ConfirmCard.qml` is adapted from the Omarchy shell's ConfirmDialog, and
+`AudioSection.qml` and `AudioModel.js` from its audio panel, all MIT, with the
+notice in [licenses/omarchy-LICENSE](licenses/omarchy-LICENSE).
 
 Not affiliated with, endorsed by, or connected to Nothing Technology Limited.
 "Nothing", "CMF" and the product names are their trademarks, used here only to
