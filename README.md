@@ -1,7 +1,11 @@
-# Nothing Buds
+# Too Much Nothing
 
-ANC, battery and playback controls for Nothing and CMF earbuds, as an Omarchy
-bar widget.
+ANC, battery and playback controls for Nothing and CMF earbuds, several pairs
+of them, plus the system audio controls, as one Omarchy bar widget.
+
+Forked from [Nothing Buds](https://github.com/SaiAungMinKhant/omarchy-nothing-buds)
+by Sai Aung Min Khant, which stays the lean, earbuds-only plugin. This fork
+grows it into more of a suite. Fixes that belong upstream go upstream.
 
 <img src="preview.png" alt="The panel on a dark and a light Omarchy theme" width="720">
 
@@ -52,7 +56,7 @@ or adjust with full knowledge of that fact.
 ## Install
 
 ```sh
-omarchy plugin add https://github.com/SaiAungMinKhant/omarchy-nothing-buds.git --enable
+omarchy plugin add https://github.com/coryblische/too-much-nothing.git --enable
 ```
 
 **Setup only ever runs from a click.** Enabling the plugin never modifies
@@ -62,11 +66,11 @@ and a "Set up now" button. The click is the consent. The panel then runs
 
 What that click installs:
 
-- the `earbuds` wrapper into `~/.local/bin`,
-- `earctl.service`, a systemd **user** service that keeps the RFCOMM session
-  open,
-- a pinned earbuds address in `~/.config/earbuds`, when exactly one Nothing
-  or CMF device is paired,
+- the `tmn` wrapper into `~/.local/bin`,
+- `tmn-earctl.service`, a systemd **user** service that keeps the RFCOMM
+  session open, serving on `127.0.0.1:8797`,
+- a pinned earbuds address in `~/.config/too-much-nothing`, when exactly one
+  Nothing or CMF device is paired,
 - earctl itself, if it is not already on the machine, or a rebuild of one
   this plugin built from an older pin.
 
@@ -81,17 +85,21 @@ Missing earctl is always built from commit
 2026-09-13 with Ear (3), Super Mic, spatial audio and CMF Buds 2 support.
 Setup fetches that exact commit, checks it out detached, verifies HEAD, and
 runs `cargo build --release --locked` so dependency resolution must match the
-committed lockfile. The binary goes into `~/.local/bin/earctl` and the commit
+committed lockfile. The binary goes into
+`~/.local/share/io.github.coryblische.too-much-nothing/bin/earctl`, never
+`~/.local/bin`, and the commit
 is recorded next to the manifest. When a later version of this plugin moves
 the pin, setup sees the recorded commit no longer matches and rebuilds, in a
 terminal. Setup never installs an AUR package, even when `yay` is available.
-An existing earctl is reused as a user-provided dependency and never rebuilt.
+An earctl package at `/usr/bin/earctl` is reused as a user-provided
+dependency and never rebuilt. One in `~/.local/bin` is ignored, since it may
+belong to Nothing Buds or something else.
 If it predates the pinned commit, the extra controls stay hidden until you
 update it yourself.
 
 Every file is written by temp file and rename, never through a symlink,
 recorded in a manifest at
-`~/.local/state/io.github.saiaungminkhant.nothing-buds/`, and backed up before
+`~/.local/state/io.github.coryblische.too-much-nothing/`, and backed up before
 replacement. A pre-existing file counts as ours only when the manifest
 records it or it is byte-identical to a version this plugin ships or has
 shipped. Anything else is refused with exit 5 rather than overwritten.
@@ -111,25 +119,26 @@ consent not given · `5` pre-existing object refused · `6` operational failure
 You can also run the installer directly:
 
 ```sh
-~/.config/omarchy/plugins/io.github.saiaungminkhant.nothing-buds/setup/install.sh
+~/.config/omarchy/plugins/io.github.coryblische.too-much-nothing/setup/install.sh
 ```
 
 Run by hand it prints its plan and asks before proceeding, and installs earctl
 too, since it has a terminal to work with. A failed run rolls back everything
 it did, restoring backups.
 
-**Upgrading from version 0.0.1**, before the manifest existed, the panel
-shows "Set up now" again, because the installed wrapper is out of date. The
-installer recognises the old wrapper and unit by hash (`NB_SHIPPED_SHAS` in
-`setup/lib.sh`), so the click replaces them with backups and records a
-manifest; your pinned address and any earctl already on the machine are left
-as they are and marked pre-existing, so a later uninstall will not touch them.
+**Coming from Nothing Buds.** The two install side by side: different
+plugin ID, wrapper, unit, config and state folders, earctl location and
+server port. Only one of them should talk to the buds, though, so turn the
+other off (see Notes). On first setup this plugin copies your earbuds pick
+and discovered channels from Nothing Buds' state folder, once, and never
+touches that folder. To remove Nothing Buds entirely, run its own
+`setup/uninstall.sh`, then `omarchy plugin remove io.github.saiaungminkhant.nothing-buds`.
 
 ## Uninstall
 
 ```sh
-~/.config/omarchy/plugins/io.github.saiaungminkhant.nothing-buds/setup/uninstall.sh
-omarchy plugin remove io.github.saiaungminkhant.nothing-buds
+~/.config/omarchy/plugins/io.github.coryblische.too-much-nothing/setup/uninstall.sh
+omarchy plugin remove io.github.coryblische.too-much-nothing
 ```
 
 Run them in that order. `omarchy plugin remove` deletes the plugin folder and
@@ -159,14 +168,14 @@ The wrapper resolves your earbuds' address in this order:
 
 1. `--address`
 2. the pair picked in the panel, if it is still paired
-3. `~/.config/earbuds/address`, while that pair is connected
+3. `~/.config/too-much-nothing/address`, while that pair is connected
 4. the first connected device whose name looks like a Nothing or CMF product
-5. `~/.config/earbuds/address`
+5. `~/.config/too-much-nothing/address`
 6. the first paired one
 
 `install.sh` writes the config file for you when exactly one such device is
 paired. The RFCOMM channel resolves the same way: `--channel`, then
-`~/.config/earbuds/channel`, then the one discovery found for that address,
+`~/.config/too-much-nothing/channel`, then the one discovery found for that address,
 then the single channel file versions up to 0.0.8 kept, else 16.
 Values are validated. An address must match `AA:BB:CC:DD:EE:FF` and a
 channel must be 1 to 63. Anything that fails is ignored with a note rather
@@ -179,13 +188,13 @@ panel shows a picker under the header. The panel controls one pair at a time,
 because earctl keeps a single RFCOMM session. Without a pick it follows the
 pair that is connected. Picking a pair links it if it is not linked, and the
 session moves to it on the next read. The pick is kept in
-`~/.local/state/io.github.saiaungminkhant.nothing-buds/selected`, and it
-outranks `~/.config/earbuds/address`, which only names a default. From a terminal:
+`~/.local/state/io.github.coryblische.too-much-nothing/selected`, and it
+outranks `~/.config/too-much-nothing/address`, which only names a default. From a terminal:
 
 ```sh
-earbuds list                    # every pair, which is connected, the pick
-earbuds select AA:BB:CC:DD:EE:FF
-earbuds select none             # back to following the connected pair
+tmn list                       # every pair, which is connected, the pick
+tmn select AA:BB:CC:DD:EE:FF
+tmn select none             # back to following the connected pair
 ```
 
 Every command checks which buds the earctl session belongs to before it
@@ -196,7 +205,7 @@ To pin per-widget instead, add keys to this widget's entry in
 `~/.config/omarchy/shell.json`:
 
 ```json
-{ "id": "io.github.saiaungminkhant.nothing-buds", "address": "AA:BB:CC:DD:EE:FF", "channel": 16 }
+{ "id": "io.github.coryblische.too-much-nothing", "address": "AA:BB:CC:DD:EE:FF", "channel": 16 }
 ```
 
 The panel validates these too and shows "Ignoring invalid address/channel in
@@ -221,24 +230,24 @@ Other models listen elsewhere:
 
 A wrong channel does not fail loudly. The link opens and the buds never
 answer. When the panel sees that twice in a row on a live link, it runs
-`earbuds discover-channel`, which tries the known channels first and then 1
+`tmn discover-channel`, which tries the known channels first and then 1
 to 30, and accepts only a channel that returns a battery reading. Accepting
 the link is not proof. On my CMF Buds 2 five channels opened and four of them
 stayed quiet. The panel shows which channel it is trying, then "Found your
 earbuds on channel N". The answer is remembered per device in
-`~/.local/state/io.github.saiaungminkhant.nothing-buds/channels/`, one file
+`~/.local/state/io.github.coryblische.too-much-nothing/channels/`, one file
 named after the address, so CMF Buds 2 and an Ear (3) each keep their own.
-The wrapper reads it after `~/.config/earbuds/channel`, and uninstall removes
+The wrapper reads it after `~/.config/too-much-nothing/channel`, and uninstall removes
 it.
 
 Discovery runs once per link and never when a channel is pinned in
-`shell.json` or `~/.config/earbuds/channel`. A pinned channel that stays
+`shell.json` or `~/.config/too-much-nothing/channel`. A pinned channel that stays
 silent is reported instead. Every probe has a deadline, 5s to disconnect, 8s
 to connect and 8s to read, so a device that answers nowhere costs about ten
 minutes and a known model a few seconds. You can run it by hand too:
 
 ```sh
-earbuds discover-channel
+tmn discover-channel
 ```
 
 If your model is not in the table and discovery found it, please open an
@@ -256,13 +265,15 @@ same earbuds.
 
 ## Security
 
-The marketplace review requirements are addressed here:
+Nothing Buds was written to the Omarchy marketplace review requirements
+below. This fork keeps every mechanism and test, but it has not been
+reviewed itself.
 
 | Requirement | Mechanism |
 |---|---|
 | Dependency installation must use the reviewed source | Missing earctl is built only from the full commit above, with detached checkout and HEAD verification before Cargo runs. `--locked` requires the committed dependency lockfile. The built commit is recorded, so a moved pin rebuilds rather than keeping an older binary. There is no AUR installation path. S5, S5a, S5c |
 | Setup must be an explicit, consented action; no overwriting objects the plugin cannot prove it owns | Setup runs only from the panel's "Set up" click (`--yes`) or a y/N prompt in a terminal. `setup/lib.sh` installs through `nb_install_file`: symlinked targets are refused, pre-existing files are refused unless recorded in the manifest or byte-identical to a version shipped here, replaced files are backed up, and everything is published by atomic rename. The panel only ever probes with `install.sh --check`, which is read-only. `bash setup/test.sh` S1, S6, S7, S9, S15, S16 |
-| Uninstall must remove only what this installation created | A manifest at `~/.local/state/io.github.saiaungminkhant.nothing-buds/` records every file, directory and package created. Removal is hash-checked, symlink-checked, empty-dir-only, and never recurses by inference. Legacy installs get content-matching only. S3, S8, S11, S12 |
+| Uninstall must remove only what this installation created | A manifest at `~/.local/state/io.github.coryblische.too-much-nothing/` records every file, directory and package created. Removal is hash-checked, symlink-checked, empty-dir-only, and never recurses by inference. Legacy installs get content-matching only. S3, S8, S11, S12 |
 | Helper calls need deadlines and output caps; a hung or noisy helper must not wedge the panel | Every wrapper call is wrapped in `/usr/bin/timeout` with byte caps on consumed output, and each helper runs in its own process group so a forked grandchild dies with it; the panel wraps every operation in `/usr/bin/timeout --kill-after=5 <deadline>`, streams stdout/stderr through capped parsers, and a watchdog plus supersession rules guarantee `busy`/link state always clears. Channel discovery is a fixed list of bounded probes, writes only inside the plugin's own state directory by temp file and rename, and refuses a symlink there. S13, S17 |
 | Executable identity and input boundaries must not be steerable | All binaries are invoked by absolute path; the `EARCTL`/`EARBUDS_ADDR`/`EARBUDS_CHANNEL` overrides are removed; the panel passes overrides as validated arguments; config and state files are opened once with `O_NOFOLLOW\|O_NONBLOCK`, checked with `fstat` on that same descriptor and read with a byte cap, so a swapped-in symlink or FIFO is refused rather than followed or waited on; they are validated against a Bluetooth-address grammar before use. S14 |
 
@@ -272,16 +283,18 @@ root, no network and no real systemd, and is the evidence for the table above.
 ## Notes
 
 Only one program can hold the Nothing RFCOMM socket at a time. BudsLink,
-ear-web and this plugin will fight over it. Stop the service before you run
+ear-web, Nothing Buds and this plugin will fight over it. Stop the service before you run
 another one:
 
 ```sh
-systemctl --user stop earctl.service
+systemctl --user stop tmn-earctl.service   # this plugin
+systemctl --user stop earctl.service       # Nothing Buds
 ```
 
 ## Licenses
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE), which keeps the original Nothing Buds
+copyright alongside this fork's.
 
 The bundled [Phosphor Icons](https://phosphoricons.com) path data is also MIT.
 Its notice is in [licenses/phosphor-LICENSE](licenses/phosphor-LICENSE).

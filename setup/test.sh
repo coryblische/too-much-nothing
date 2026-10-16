@@ -51,25 +51,25 @@ new_home() {
 }
 
 run_install() { # -- install.sh args...
-  env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" \
+  env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" XDG_DATA_HOME="$H/.local/share" \
     bash "$SUBJ/install.sh" "$@" </dev/null
 }
 
 run_uninstall() { # -- uninstall.sh args...
-  env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" \
+  env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" XDG_DATA_HOME="$H/.local/share" \
     bash "$SUBJ/uninstall.sh" "$@" </dev/null
 }
 
 run_pty() { # script args... -- runs under a pty so consent prompts fire;
             # feeds "y" on stdin. Returns the child's exit code via -e.
   printf 'y\ny\ny\n' |
-    env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" \
+    env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" XDG_DATA_HOME="$H/.local/share" \
       /usr/bin/script -q -e -c "bash $SUBJ/$1 ${*:2}" /dev/null
 }
 
 wrap() { # wrapper args...
-  env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" \
-    bash "$SUBJ/earbuds" "$@"
+  env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" XDG_DATA_HOME="$H/.local/share" \
+    bash "$SUBJ/tmn" "$@"
 }
 
 log() { /usr/bin/cat "$FAKE/log"; }
@@ -80,12 +80,12 @@ log_has() { /usr/bin/grep -q -- "$1" "$FAKE/log"; }
 
 step "preparing subject copies"
 /usr/bin/mkdir -p -- "$SUBJ" "$FAKE"
-for f in install.sh uninstall.sh lib.sh earbuds earctl.service; do
+for f in install.sh uninstall.sh lib.sh tmn tmn-earctl.service; do
   /usr/bin/cp -- "setup/$f" "$SUBJ/$f"
 done
 
 # Point the subject at the fakes; the real timeout is the enforcement under test.
-for f in lib.sh earbuds; do
+for f in lib.sh tmn; do
   /usr/bin/sed -i \
     -e "s|^NB_BT=.*|NB_BT=$FAKE/bluetoothctl|" \
     -e "s|^NB_SYSTEMCTL=.*|NB_SYSTEMCTL=$FAKE/systemctl|" \
@@ -102,11 +102,11 @@ assert_eq "lib.sh bluetoothctl rewritten" \
 assert_eq "lib.sh earctl fallback rewritten" \
   "$(/usr/bin/grep -c "^NB_EARCTL_FALLBACK=$FAKE/earctl$" "$SUBJ/lib.sh")" "1"
 assert_eq "earbuds bluetoothctl rewritten" \
-  "$(/usr/bin/grep -c "^NB_BT=$FAKE/bluetoothctl$" "$SUBJ/earbuds")" "1"
+  "$(/usr/bin/grep -c "^NB_BT=$FAKE/bluetoothctl$" "$SUBJ/tmn")" "1"
 assert_eq "earbuds earctl fallback rewritten" \
-  "$(/usr/bin/grep -c "^NB_EARCTL_FALLBACK=$FAKE/earctl$" "$SUBJ/earbuds")" "1"
+  "$(/usr/bin/grep -c "^NB_EARCTL_FALLBACK=$FAKE/earctl$" "$SUBJ/tmn")" "1"
 assert_eq "earbuds pactl rewritten" \
-  "$(/usr/bin/grep -c "^NB_PACTL=$FAKE/pactl$" "$SUBJ/earbuds")" "1"
+  "$(/usr/bin/grep -c "^NB_PACTL=$FAKE/pactl$" "$SUBJ/tmn")" "1"
 
 # Stand-in for the 0.0.1 wrapper (its bytes are not in this repo).
 printf '#!/bin/bash\n# legacy wrapper from a pre-manifest release\necho legacy\n' >"$FAKE/legacy-earbuds"
@@ -135,13 +135,13 @@ assert_eq "legacy unit reproduces the 0.0.1 hash" \
   "$(/usr/bin/sha256sum -- "$FAKE/legacy-unit" | /usr/bin/cut -d' ' -f1)" \
   "549b60883eb69893e7f8200c83e10b8852a0537c032ae0fe9cca82907aa55d58"
 
-for f in install.sh uninstall.sh lib.sh earbuds; do
+for f in install.sh uninstall.sh lib.sh tmn; do
   bash -n "$SUBJ/$f" || bad "syntax: $f"
 done
 ok "all subject scripts parse"
 
 run_check() { # install.sh --check in the current home; prints nothing
-  env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" \
+  env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" XDG_DATA_HOME="$H/.local/share" \
     bash "$SUBJ/install.sh" --check </dev/null >/dev/null 2>&1
 }
 
@@ -177,6 +177,10 @@ EOF
 
 cat >"$FAKE/earctl.real" <<'EOF'
 #!/bin/bash
+# The wrapper always names this plugin's server; anything else is a bug.
+[[ $1 == --endpoint && $2 == http://127.0.0.1:8797 ]] ||
+  { echo "earctl wrong-endpoint $*" >> "__FAKE__/log"; exit 1; }
+shift 2
 echo "earctl $*" >> "__FAKE__/log"
 # Flag file: fail the first `anc get` so status reconnects and logs --channel.
 if [[ $1 == anc && $2 == get && -f "__FAKE__/anc-fail-first" && ! -f "__FAKE__/anc-failed" ]]; then
@@ -301,7 +305,7 @@ for f in bluetoothctl systemctl yay pacman pactl git rustup; do
   /usr/bin/chmod 755 "$FAKE/$f"
 done
 
-manifest_of() { echo "$H/.local/state/io.github.saiaungminkhant.nothing-buds/manifest"; }
+manifest_of() { echo "$H/.local/state/io.github.coryblische.too-much-nothing/manifest"; }
 
 # ============================================================= scenarios
 
@@ -311,20 +315,20 @@ log_reset
 run_install
 rc=$?
 assert_rc "no --yes, non-tty" 4 "$rc"
-assert_gone "wrapper" "$H/.local/bin/earbuds"
-assert_gone "unit" "$H/.config/systemd/user/earctl.service"
-assert_gone "state dir" "$H/.local/state/io.github.saiaungminkhant.nothing-buds"
+assert_gone "wrapper" "$H/.local/bin/tmn"
+assert_gone "unit" "$H/.config/systemd/user/tmn-earctl.service"
+assert_gone "state dir" "$H/.local/state/io.github.coryblische.too-much-nothing"
 assert_no_line "no systemctl calls" "systemctl" "$FAKE/log"
 
 step "S1b: declined consent in a terminal, nothing touched"
 new_home
 log_reset
 printf 'n\n' |
-  env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" \
+  env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" XDG_DATA_HOME="$H/.local/share" \
     /usr/bin/script -q -e -c "bash $SUBJ/install.sh" /dev/null
 rc=$?
 assert_rc "declined in pty" 4 "$rc"
-assert_gone "wrapper" "$H/.local/bin/earbuds"
+assert_gone "wrapper" "$H/.local/bin/tmn"
 
 step "S2: fresh install with earctl already present (AUR-style)"
 new_home
@@ -333,20 +337,20 @@ make_earctl
 run_install --yes
 rc=$?
 assert_rc "install" 0 "$rc"
-assert_exists "wrapper" "$H/.local/bin/earbuds"
-assert_exists "unit" "$H/.config/systemd/user/earctl.service"
-assert_exists "config" "$H/.config/earbuds/address"
-assert_eq "pinned address" "$(/usr/bin/cat "$H/.config/earbuds/address")" "AA:BB:CC:DD:EE:FF"
+assert_exists "wrapper" "$H/.local/bin/tmn"
+assert_exists "unit" "$H/.config/systemd/user/tmn-earctl.service"
+assert_exists "config" "$H/.config/too-much-nothing/address"
+assert_eq "pinned address" "$(/usr/bin/cat "$H/.config/too-much-nothing/address")" "AA:BB:CC:DD:EE:FF"
 assert_line "unit execs the resolved earctl" \
-  "^ExecStart=$FAKE/earctl server --addr 127.0.0.1:8787\$" "$H/.config/systemd/user/earctl.service"
-assert_no_line "no placeholder left in the unit" "%EARCTL%" "$H/.config/systemd/user/earctl.service"
-assert_eq "earctl-bin records the existing dependency path" "$(/usr/bin/cat "$H/.local/state/io.github.saiaungminkhant.nothing-buds/earctl-bin")" "$FAKE/earctl"
+  "^ExecStart=$FAKE/earctl server --addr 127.0.0.1:8797\$" "$H/.config/systemd/user/tmn-earctl.service"
+assert_no_line "no placeholder left in the unit" "%EARCTL%" "$H/.config/systemd/user/tmn-earctl.service"
+assert_eq "earctl-bin records the existing dependency path" "$(/usr/bin/cat "$H/.local/state/io.github.coryblische.too-much-nothing/earctl-bin")" "$FAKE/earctl"
 M=$(manifest_of)
-assert_line "manifest records wrapper" "file$(/usr/bin/printf '\t')$H/.local/bin/earbuds" "$M"
-assert_line "manifest records unit" "file$(/usr/bin/printf '\t')$H/.config/systemd/user/earctl.service" "$M"
+assert_line "manifest records wrapper" "file$(/usr/bin/printf '\t')$H/.local/bin/tmn" "$M"
+assert_line "manifest records unit" "file$(/usr/bin/printf '\t')$H/.config/systemd/user/tmn-earctl.service" "$M"
 assert_line "manifest records pre-existing earctl" "pre$(/usr/bin/printf '\t')$FAKE/earctl" "$M"
 assert_line "daemon-reload ran" "systemctl --user daemon-reload" "$FAKE/log"
-assert_line "unit enabled" "systemctl --user enable --now earctl.service" "$FAKE/log"
+assert_line "unit enabled" "systemctl --user enable --now tmn-earctl.service" "$FAKE/log"
 assert_no_line "yay never invoked" "yay" "$FAKE/log"
 assert_no_line "pacman never invoked" "pacman" "$FAKE/log"
 
@@ -355,12 +359,12 @@ log_reset
 run_uninstall --yes
 rc=$?
 assert_rc "uninstall" 0 "$rc"
-assert_gone "wrapper" "$H/.local/bin/earbuds"
-assert_gone "unit" "$H/.config/systemd/user/earctl.service"
-assert_gone "config dir (we created it, now empty)" "$H/.config/earbuds"
-assert_gone "state dir" "$H/.local/state/io.github.saiaungminkhant.nothing-buds"
+assert_gone "wrapper" "$H/.local/bin/tmn"
+assert_gone "unit" "$H/.config/systemd/user/tmn-earctl.service"
+assert_gone "config dir (we created it, now empty)" "$H/.config/too-much-nothing"
+assert_gone "state dir" "$H/.local/state/io.github.coryblische.too-much-nothing"
 assert_exists "pre-existing earctl untouched" "$FAKE/earctl"
-assert_line "service stopped" "systemctl --user disable --now earctl.service" "$FAKE/log"
+assert_line "service stopped" "systemctl --user disable --now tmn-earctl.service" "$FAKE/log"
 assert_no_line "no package-manager removal" "-Rns" "$FAKE/log"
 assert_no_line "pacman -Qoq never used" "-Qoq" "$FAKE/log"
 
@@ -371,9 +375,9 @@ log_reset
 run_install --yes
 rc=$?
 assert_rc "earctl missing, non-tty" 2 "$rc"
-assert_gone "wrapper not installed" "$H/.local/bin/earbuds"
-assert_gone "unit not installed" "$H/.config/systemd/user/earctl.service"
-assert_gone "state dir rolled back" "$H/.local/state/io.github.saiaungminkhant.nothing-buds"
+assert_gone "wrapper not installed" "$H/.local/bin/tmn"
+assert_gone "unit not installed" "$H/.config/systemd/user/tmn-earctl.service"
+assert_gone "state dir rolled back" "$H/.local/state/io.github.coryblische.too-much-nothing"
 
 step "S5: interactive install builds pinned source even with yay available"
 new_home
@@ -382,26 +386,26 @@ log_reset
 run_pty install.sh
 rc=$?
 assert_rc "consented terminal install" 0 "$rc"
-assert_exists "wrapper" "$H/.local/bin/earbuds"
-assert_exists "unit" "$H/.config/systemd/user/earctl.service"
-assert_exists "built earctl" "$H/.local/bin/earctl"
+assert_exists "wrapper" "$H/.local/bin/tmn"
+assert_exists "unit" "$H/.config/systemd/user/tmn-earctl.service"
+assert_exists "built earctl" "$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl"
 M=$(manifest_of)
-assert_line "manifest records the binary" "file$(printf '\t')$H/.local/bin/earctl" "$M"
+assert_line "manifest records the binary" "file$(printf '\t')$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl" "$M"
 assert_no_line "no package ownership recorded" "^pkg" "$M"
 assert_no_line "yay never invoked despite being available" "yay" "$FAKE/log"
 assert_line "exact commit fetched" "fetch -q --depth 1 origin 1315bfbf07eb74b946606e30ede2d4290449082f" "$FAKE/log"
 assert_line "detached checkout" "checkout -q --detach 1315bfbf07eb74b946606e30ede2d4290449082f" "$FAKE/log"
 assert_line "HEAD verified" "rev-parse HEAD" "$FAKE/log"
 assert_line "locked build through the Cargo proxy" "cargo build --release --locked" "$FAKE/log"
-assert_eq "earctl-bin records built binary" "$(/usr/bin/cat "$H/.local/state/io.github.saiaungminkhant.nothing-buds/earctl-bin")" "$H/.local/bin/earctl"
-assert_line "unit uses built binary" "^ExecStart=$H/.local/bin/earctl server" "$H/.config/systemd/user/earctl.service"
+assert_eq "earctl-bin records built binary" "$(/usr/bin/cat "$H/.local/state/io.github.coryblische.too-much-nothing/earctl-bin")" "$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl"
+assert_line "unit uses built binary" "^ExecStart=$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl server" "$H/.config/systemd/user/tmn-earctl.service"
 
 step "S5a: a plugin-built earctl from an older pin is rebuilt, a user's is not"
-assert_eq "build commit recorded" "$(/usr/bin/cat "$H/.local/state/io.github.saiaungminkhant.nothing-buds/earctl-commit")" "1315bfbf07eb74b946606e30ede2d4290449082f"
+assert_eq "build commit recorded" "$(/usr/bin/cat "$H/.local/state/io.github.coryblische.too-much-nothing/earctl-commit")" "1315bfbf07eb74b946606e30ede2d4290449082f"
 run_install --check
 assert_rc "check passes on the pinned build" 0 "$?"
 # An install from before 0.0.7 never recorded the build commit at all.
-/usr/bin/rm -f -- "$H/.local/state/io.github.saiaungminkhant.nothing-buds/earctl-commit"
+/usr/bin/rm -f -- "$H/.local/state/io.github.coryblische.too-much-nothing/earctl-commit"
 run_install --check
 assert_rc "check reports a stale build" 1 "$?"
 log_reset
@@ -412,7 +416,7 @@ log_reset
 run_pty install.sh
 assert_rc "terminal setup rebuilds" 0 "$?"
 assert_line "rebuilt from the pin" "fetch -q --depth 1 origin 1315bfbf07eb74b946606e30ede2d4290449082f" "$FAKE/log"
-assert_eq "build commit updated" "$(/usr/bin/cat "$H/.local/state/io.github.saiaungminkhant.nothing-buds/earctl-commit")" "1315bfbf07eb74b946606e30ede2d4290449082f"
+assert_eq "build commit updated" "$(/usr/bin/cat "$H/.local/state/io.github.coryblische.too-much-nothing/earctl-commit")" "1315bfbf07eb74b946606e30ede2d4290449082f"
 run_install --check
 assert_rc "check passes after the rebuild" 0 "$?"
 
@@ -420,9 +424,9 @@ step "S5b: uninstall removes the recorded binary; --keep-earctl keeps it"
 log_reset
 run_uninstall --yes
 assert_rc "uninstall with built binary" 0 "$?"
-assert_gone "earctl binary removed" "$H/.local/bin/earctl"
+assert_gone "earctl binary removed" "$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl"
 assert_no_line "no package manager invoked" "yay" "$FAKE/log"
-assert_gone "state dir" "$H/.local/state/io.github.saiaungminkhant.nothing-buds"
+assert_gone "state dir" "$H/.local/state/io.github.coryblische.too-much-nothing"
 
 new_home
 log_reset
@@ -431,7 +435,7 @@ assert_rc "second terminal install" 0 "$?"
 log_reset
 run_uninstall --yes --keep-earctl
 assert_rc "uninstall keeping earctl" 0 "$?"
-assert_exists "earctl kept" "$H/.local/bin/earctl"
+assert_exists "earctl kept" "$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl"
 assert_no_line "no package removal attempted" "-Rns" "$FAKE/log"
 
 step "S5c: source failures abort without publishing files or falling back to yay"
@@ -445,10 +449,10 @@ for failure in git-fail git-wrong-head cargo-fail systemctl-fail-enable; do
   expected=2
   [[ $failure != systemctl-fail-enable ]] || expected=6
   assert_rc "$failure aborts install" "$expected" "$rc"
-  assert_gone "$failure leaves no binary" "$H/.local/bin/earctl"
-  assert_gone "$failure leaves no wrapper" "$H/.local/bin/earbuds"
-  assert_gone "$failure leaves no unit" "$H/.config/systemd/user/earctl.service"
-  assert_gone "$failure rolls state back" "$H/.local/state/io.github.saiaungminkhant.nothing-buds"
+  assert_gone "$failure leaves no binary" "$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl"
+  assert_gone "$failure leaves no wrapper" "$H/.local/bin/tmn"
+  assert_gone "$failure leaves no unit" "$H/.config/systemd/user/tmn-earctl.service"
+  assert_gone "$failure rolls state back" "$H/.local/state/io.github.coryblische.too-much-nothing"
   assert_no_line "$failure never falls back to yay" "yay" "$FAKE/log"
   if [[ $failure == git-* ]]; then
     assert_no_line "$failure never runs Cargo" "cargo" "$FAKE/log"
@@ -474,54 +478,54 @@ log_reset
 make_earctl
 /usr/bin/mkdir -p -- "$H/.local/bin"
 echo "do not touch" >"$T/victim.txt"
-/usr/bin/ln -s -- "$T/victim.txt" "$H/.local/bin/earbuds"
+/usr/bin/ln -s -- "$T/victim.txt" "$H/.local/bin/tmn"
 run_install --yes
 rc=$?
 assert_rc "symlink refused" 5 "$rc"
 assert_eq "victim untouched" "$(/usr/bin/cat "$T/victim.txt")" "do not touch"
-assert_exists "symlink left as-is" "$H/.local/bin/earbuds"
-assert_gone "unit not installed after refusal" "$H/.config/systemd/user/earctl.service"
+assert_exists "symlink left as-is" "$H/.local/bin/tmn"
+assert_gone "unit not installed after refusal" "$H/.config/systemd/user/tmn-earctl.service"
 
 step "S7: pre-existing foreign file at the unit path is refused; --replace-existing replaces it with a backup"
 new_home
 log_reset
 make_earctl
 /usr/bin/mkdir -p -- "$H/.config/systemd/user"
-echo "foreign unit" >"$H/.config/systemd/user/earctl.service"
+echo "foreign unit" >"$H/.config/systemd/user/tmn-earctl.service"
 run_install --yes
 rc=$?
 assert_rc "foreign unit refused" 5 "$rc"
-assert_eq "foreign unit untouched" "$(/usr/bin/cat "$H/.config/systemd/user/earctl.service")" "foreign unit"
+assert_eq "foreign unit untouched" "$(/usr/bin/cat "$H/.config/systemd/user/tmn-earctl.service")" "foreign unit"
 
 log_reset
 run_install --yes --replace-existing
 rc=$?
 assert_rc "replace-existing proceeds" 0 "$rc"
 assert_line "unit now ours (rendered)" \
-  "^ExecStart=$FAKE/earctl server --addr 127.0.0.1:8787\$" "$H/.config/systemd/user/earctl.service"
+  "^ExecStart=$FAKE/earctl server --addr 127.0.0.1:8797\$" "$H/.config/systemd/user/tmn-earctl.service"
 assert_exists "old copy backed up" \
-  "$H/.local/state/io.github.saiaungminkhant.nothing-buds/backup/earctl.service"
+  "$H/.local/state/io.github.coryblische.too-much-nothing/backup/tmn-earctl.service"
 assert_eq "backup holds the foreign content" \
-  "$(/usr/bin/cat "$H/.local/state/io.github.saiaungminkhant.nothing-buds/backup/earctl.service")" "foreign unit"
+  "$(/usr/bin/cat "$H/.local/state/io.github.coryblische.too-much-nothing/backup/tmn-earctl.service")" "foreign unit"
 
 step "S8: pre-existing config dir with a foreign file is respected"
 new_home
 log_reset
 make_earctl
-/usr/bin/mkdir -p -- "$H/.config/earbuds"
-echo 12 >"$H/.config/earbuds/channel"
+/usr/bin/mkdir -p -- "$H/.config/too-much-nothing"
+echo 12 >"$H/.config/too-much-nothing/channel"
 run_install --yes
 rc=$?
 assert_rc "install with foreign config dir" 0 "$rc"
-assert_exists "foreign channel file" "$H/.config/earbuds/channel"
-assert_exists "our address file" "$H/.config/earbuds/address"
+assert_exists "foreign channel file" "$H/.config/too-much-nothing/channel"
+assert_exists "our address file" "$H/.config/too-much-nothing/address"
 log_reset
 run_uninstall --yes
 rc=$?
 assert_rc "uninstall leaves foreign file" 0 "$rc"
-assert_exists "foreign channel file survives" "$H/.config/earbuds/channel"
-assert_gone "our address file removed" "$H/.config/earbuds/address"
-assert_exists "config dir survives (not empty)" "$H/.config/earbuds"
+assert_exists "foreign channel file survives" "$H/.config/too-much-nothing/channel"
+assert_gone "our address file removed" "$H/.config/too-much-nothing/address"
+assert_exists "config dir survives (not empty)" "$H/.config/too-much-nothing"
 
 step "S9: failed enable rolls everything back"
 new_home
@@ -532,12 +536,12 @@ run_install --yes
 rc=$?
 assert_rc "enable failure" 6 "$rc"
 /usr/bin/rm -f -- "$FAKE/systemctl-fail-enable"
-assert_gone "wrapper rolled back" "$H/.local/bin/earbuds"
-assert_gone "unit rolled back" "$H/.config/systemd/user/earctl.service"
-assert_gone "address rolled back" "$H/.config/earbuds/address"
-assert_gone "config dir rolled back" "$H/.config/earbuds"
-assert_gone "state dir rolled back" "$H/.local/state/io.github.saiaungminkhant.nothing-buds"
-assert_line "disable ran after failed enable" "systemctl --user disable earctl.service" "$FAKE/log"
+assert_gone "wrapper rolled back" "$H/.local/bin/tmn"
+assert_gone "unit rolled back" "$H/.config/systemd/user/tmn-earctl.service"
+assert_gone "address rolled back" "$H/.config/too-much-nothing/address"
+assert_gone "config dir rolled back" "$H/.config/too-much-nothing"
+assert_gone "state dir rolled back" "$H/.local/state/io.github.coryblische.too-much-nothing"
+assert_line "disable ran after failed enable" "systemctl --user disable tmn-earctl.service" "$FAKE/log"
 assert_exists "pre-existing earctl untouched" "$FAKE/earctl"
 
 step "S10: double install is idempotent and keeps exactly one backup"
@@ -550,51 +554,51 @@ run_install --yes
 assert_rc "second install" 0 "$?"
 M=$(manifest_of)
 assert_eq "no duplicate wrapper record" \
-  "$(/usr/bin/grep -c "file$(printf '\t')$H/.local/bin/earbuds$(printf '\t')" "$M")" "1"
+  "$(/usr/bin/grep -c "file$(printf '\t')$H/.local/bin/tmn$(printf '\t')" "$M")" "1"
 assert_exists "backup of first wrapper" \
-  "$H/.local/state/io.github.saiaungminkhant.nothing-buds/backup/earbuds"
+  "$H/.local/state/io.github.coryblische.too-much-nothing/backup/tmn"
 
 step "S11: uninstall refuses a wrapper the user has modified"
 log_reset
-echo "tampered" >"$H/.local/bin/earbuds"
+echo "tampered" >"$H/.local/bin/tmn"
 run_uninstall --yes
 rc=$?
 assert_rc "modified wrapper leaves partial exit" 6 "$rc"
-assert_eq "tampered wrapper left alone" "$(/usr/bin/cat "$H/.local/bin/earbuds")" "tampered"
+assert_eq "tampered wrapper left alone" "$(/usr/bin/cat "$H/.local/bin/tmn")" "tampered"
 
 step "S12: legacy uninstall (no manifest) removes only content matches"
 new_home
 log_reset
 make_earctl
-/usr/bin/mkdir -p -- "$H/.local/bin" "$H/.config/systemd/user" "$H/.config/earbuds"
-/usr/bin/cp -- "$SUBJ/earbuds" "$H/.local/bin/earbuds"
-/usr/bin/cp -- "$FAKE/legacy-unit" "$H/.config/systemd/user/earctl.service"
-echo 16 >"$H/.config/earbuds/channel"
+/usr/bin/mkdir -p -- "$H/.local/bin" "$H/.config/systemd/user" "$H/.config/too-much-nothing"
+/usr/bin/cp -- "$SUBJ/tmn" "$H/.local/bin/tmn"
+/usr/bin/cp -- "$FAKE/legacy-unit" "$H/.config/systemd/user/tmn-earctl.service"
+echo 16 >"$H/.config/too-much-nothing/channel"
 run_uninstall --yes
 rc=$?
 assert_rc "legacy uninstall" 0 "$rc"
-assert_gone "legacy wrapper (content matched)" "$H/.local/bin/earbuds"
-assert_gone "legacy 0.0.1 unit (hash matched)" "$H/.config/systemd/user/earctl.service"
-assert_exists "legacy config left alone" "$H/.config/earbuds/channel"
+assert_gone "legacy wrapper (content matched)" "$H/.local/bin/tmn"
+assert_gone "legacy 0.0.1 unit (hash matched)" "$H/.config/systemd/user/tmn-earctl.service"
+assert_exists "legacy config left alone" "$H/.config/too-much-nothing/channel"
 assert_exists "legacy earctl left alone" "$FAKE/earctl"
 
 new_home
 log_reset
 make_earctl
 /usr/bin/mkdir -p -- "$H/.local/bin"
-/usr/bin/cp -- "$SUBJ/earbuds" "$H/.local/bin/earbuds"
-echo "someone else's wrapper" >"$H/.local/bin/earbuds"
+/usr/bin/cp -- "$SUBJ/tmn" "$H/.local/bin/tmn"
+echo "someone else's wrapper" >"$H/.local/bin/tmn"
 run_uninstall --yes
 rc=$?
 assert_rc "foreign wrapper refused in legacy mode" 6 "$rc"
-assert_eq "foreign wrapper kept" "$(/usr/bin/cat "$H/.local/bin/earbuds")" "someone else's wrapper"
+assert_eq "foreign wrapper kept" "$(/usr/bin/cat "$H/.local/bin/tmn")" "someone else's wrapper"
 
 step "S13: hung helpers cannot wedge the wrapper; every call is bounded"
 new_home
 log_reset
 make_earctl
-/usr/bin/mkdir -p -- "$H/.config/earbuds"
-echo "AA:BB:CC:DD:EE:FF" >"$H/.config/earbuds/address"
+/usr/bin/mkdir -p -- "$H/.config/too-much-nothing"
+echo "AA:BB:CC:DD:EE:FF" >"$H/.config/too-much-nothing/address"
 
 t0=$SECONDS
 out=$(wrap status)
@@ -697,8 +701,8 @@ step "S14: inputs are validated before they reach any command"
 new_home
 log_reset
 make_earctl
-/usr/bin/mkdir -p -- "$H/.config/earbuds"
-echo "AA:BB:CC:DD:EE:FF" >"$H/.config/earbuds/address"
+/usr/bin/mkdir -p -- "$H/.config/too-much-nothing"
+echo "AA:BB:CC:DD:EE:FF" >"$H/.config/too-much-nothing/address"
 
 log_reset
 wrap --address "--evil-injection" status
@@ -723,7 +727,7 @@ assert_line "override channel reached the command" \
   "--channel 16" "$FAKE/log"
 
 # A giant address file is refused by the size bound, not read.
-/usr/bin/head -c 10000 /dev/zero | /usr/bin/tr '\0' 'x' >"$H/.config/earbuds/address"
+/usr/bin/head -c 10000 /dev/zero | /usr/bin/tr '\0' 'x' >"$H/.config/too-much-nothing/address"
 log_reset
 wrap status >/dev/null 2>&1
 assert_line "fell back to detection after oversized file" \
@@ -731,26 +735,26 @@ assert_line "fell back to detection after oversized file" \
 
 # A symlinked address file is never read through.
 echo "11:22:33:44:55:66" >"$T/addr-target"
-/usr/bin/rm -f -- "$H/.config/earbuds/address"
-/usr/bin/ln -s -- "$T/addr-target" "$H/.config/earbuds/address"
+/usr/bin/rm -f -- "$H/.config/too-much-nothing/address"
+/usr/bin/ln -s -- "$T/addr-target" "$H/.config/too-much-nothing/address"
 log_reset
 wrap status >/dev/null 2>&1
 assert_line "symlinked config refused, detection used instead" \
   "bluetoothctl info AA:BB:CC:DD:EE:FF" "$FAKE/log"
 
 # A FIFO at the address path is refused at once, not waited on.
-/usr/bin/rm -f -- "$H/.config/earbuds/address"
-/usr/bin/mkfifo -- "$H/.config/earbuds/address"
+/usr/bin/rm -f -- "$H/.config/too-much-nothing/address"
+/usr/bin/mkfifo -- "$H/.config/too-much-nothing/address"
 log_reset
-env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" \
-  /usr/bin/timeout 20 bash "$SUBJ/earbuds" status >/dev/null 2>&1
+env HOME="$H" XDG_CONFIG_HOME="$H/.config" XDG_STATE_HOME="$H/.local/state" XDG_DATA_HOME="$H/.local/share" \
+  /usr/bin/timeout 20 bash "$SUBJ/tmn" status >/dev/null 2>&1
 assert_rc "FIFO config does not block the wrapper" 0 "$?"
 assert_line "FIFO config refused, detection used instead" \
   "bluetoothctl info AA:BB:CC:DD:EE:FF" "$FAKE/log"
 
 # A garbage channel file is ignored in favour of the default.
-/usr/bin/rm -f -- "$H/.config/earbuds/address"
-echo "banana" >"$H/.config/earbuds/channel"
+/usr/bin/rm -f -- "$H/.config/too-much-nothing/address"
+echo "banana" >"$H/.config/too-much-nothing/channel"
 log_reset
 touch "$FAKE/anc-fail-first" "$FAKE/bt-connected"
 wrap --address "AA:BB:CC:DD:EE:FF" status >/dev/null 2>&1
@@ -764,8 +768,8 @@ log_reset
 make_earctl
 run_check
 assert_rc "fresh home is not set up" 1 "$?"
-assert_gone "--check created no state dir" "$H/.local/state/io.github.saiaungminkhant.nothing-buds"
-assert_gone "--check created no wrapper" "$H/.local/bin/earbuds"
+assert_gone "--check created no state dir" "$H/.local/state/io.github.coryblische.too-much-nothing"
+assert_gone "--check created no wrapper" "$H/.local/bin/tmn"
 assert_no_line "--check ran no systemctl" "systemctl" "$FAKE/log"
 
 run_install --yes
@@ -773,20 +777,20 @@ assert_rc "install" 0 "$?"
 run_check
 assert_rc "installed home is set up" 0 "$?"
 
-echo "tampered" >>"$H/.local/bin/earbuds"
+echo "tampered" >>"$H/.local/bin/tmn"
 run_check
 assert_rc "an outdated or edited wrapper is not set up" 1 "$?"
-/usr/bin/cp -- "$SUBJ/earbuds" "$H/.local/bin/earbuds"
+/usr/bin/cp -- "$SUBJ/tmn" "$H/.local/bin/tmn"
 run_check
 assert_rc "restored wrapper is set up again" 0 "$?"
 
-/usr/bin/rm -f -- "$H/.local/bin/earbuds"
-/usr/bin/ln -s -- "$SUBJ/earbuds" "$H/.local/bin/earbuds"
+/usr/bin/rm -f -- "$H/.local/bin/tmn"
+/usr/bin/ln -s -- "$SUBJ/tmn" "$H/.local/bin/tmn"
 run_check
 assert_rc "a symlinked wrapper is not set up, even to the right bytes" 1 "$?"
 
-/usr/bin/rm -f -- "$H/.local/bin/earbuds"
-/usr/bin/cp -- "$SUBJ/earbuds" "$H/.local/bin/earbuds"
+/usr/bin/rm -f -- "$H/.local/bin/tmn"
+/usr/bin/cp -- "$SUBJ/tmn" "$H/.local/bin/tmn"
 /usr/bin/rm -f -- "$FAKE/earctl"
 run_check
 assert_rc "missing earctl is not set up" 1 "$?"
@@ -796,10 +800,10 @@ step "S16: upgrade from a pre-manifest install is recognised, not refused"
 new_home
 log_reset
 make_earctl
-/usr/bin/mkdir -p -- "$H/.local/bin" "$H/.config/systemd/user" "$H/.config/earbuds"
-/usr/bin/install -m755 -- "$FAKE/legacy-earbuds" "$H/.local/bin/earbuds"
-/usr/bin/cp -- "$FAKE/legacy-unit" "$H/.config/systemd/user/earctl.service"
-echo "11:22:33:44:55:66" >"$H/.config/earbuds/address"
+/usr/bin/mkdir -p -- "$H/.local/bin" "$H/.config/systemd/user" "$H/.config/too-much-nothing"
+/usr/bin/install -m755 -- "$FAKE/legacy-earbuds" "$H/.local/bin/tmn"
+/usr/bin/cp -- "$FAKE/legacy-unit" "$H/.config/systemd/user/tmn-earctl.service"
+echo "11:22:33:44:55:66" >"$H/.config/too-much-nothing/address"
 run_check
 assert_rc "legacy install reads as not set up (wrapper outdated)" 1 "$?"
 
@@ -807,17 +811,17 @@ run_install --yes
 rc=$?
 assert_rc "upgrade install" 0 "$rc"
 assert_eq "wrapper replaced with the current one" \
-  "$(/usr/bin/cmp -s "$H/.local/bin/earbuds" "$SUBJ/earbuds" && echo same)" "same"
+  "$(/usr/bin/cmp -s "$H/.local/bin/tmn" "$SUBJ/tmn" && echo same)" "same"
 assert_eq "legacy wrapper backed up" \
-  "$(/usr/bin/cmp -s "$H/.local/state/io.github.saiaungminkhant.nothing-buds/backup/earbuds" "$FAKE/legacy-earbuds" && echo same)" "same"
+  "$(/usr/bin/cmp -s "$H/.local/state/io.github.coryblische.too-much-nothing/backup/tmn" "$FAKE/legacy-earbuds" && echo same)" "same"
 assert_line "unit re-rendered" \
-  "^ExecStart=$FAKE/earctl server --addr 127.0.0.1:8787\$" "$H/.config/systemd/user/earctl.service"
+  "^ExecStart=$FAKE/earctl server --addr 127.0.0.1:8797\$" "$H/.config/systemd/user/tmn-earctl.service"
 assert_eq "legacy unit backed up" \
-  "$(/usr/bin/cmp -s "$H/.local/state/io.github.saiaungminkhant.nothing-buds/backup/earctl.service" "$FAKE/legacy-unit" && echo same)" "same"
-assert_eq "user's pinned address untouched" "$(/usr/bin/cat "$H/.config/earbuds/address")" "11:22:33:44:55:66"
+  "$(/usr/bin/cmp -s "$H/.local/state/io.github.coryblische.too-much-nothing/backup/tmn-earctl.service" "$FAKE/legacy-unit" && echo same)" "same"
+assert_eq "user's pinned address untouched" "$(/usr/bin/cat "$H/.config/too-much-nothing/address")" "11:22:33:44:55:66"
 M=$(manifest_of)
-assert_line "config dir recorded as pre-existing" "pre$(printf '\t')$H/.config/earbuds" "$M"
-assert_no_line "address file not claimed" "$H/.config/earbuds/address" "$M"
+assert_line "config dir recorded as pre-existing" "pre$(printf '\t')$H/.config/too-much-nothing" "$M"
+assert_no_line "address file not claimed" "$H/.config/too-much-nothing/address" "$M"
 run_check
 assert_rc "upgraded home is set up" 0 "$?"
 
@@ -825,10 +829,10 @@ log_reset
 run_uninstall --yes
 rc=$?
 assert_rc "uninstall after upgrade" 0 "$rc"
-assert_gone "wrapper" "$H/.local/bin/earbuds"
-assert_gone "unit" "$H/.config/systemd/user/earctl.service"
-assert_exists "pre-existing config dir kept" "$H/.config/earbuds"
-assert_exists "user's address file kept" "$H/.config/earbuds/address"
+assert_gone "wrapper" "$H/.local/bin/tmn"
+assert_gone "unit" "$H/.config/systemd/user/tmn-earctl.service"
+assert_exists "pre-existing config dir kept" "$H/.config/too-much-nothing"
+assert_exists "user's address file kept" "$H/.config/too-much-nothing/address"
 assert_exists "pre-existing earctl kept" "$FAKE/earctl"
 
 # A foreign wrapper that merely LOOKS legacy (different bytes) is still refused.
@@ -836,11 +840,11 @@ new_home
 log_reset
 make_earctl
 /usr/bin/mkdir -p -- "$H/.local/bin"
-printf '#!/bin/bash\necho not ours\n' >"$H/.local/bin/earbuds"
-/usr/bin/chmod 755 "$H/.local/bin/earbuds"
+printf '#!/bin/bash\necho not ours\n' >"$H/.local/bin/tmn"
+/usr/bin/chmod 755 "$H/.local/bin/tmn"
 run_install --yes
 assert_rc "unknown wrapper bytes still refused" 5 "$?"
-assert_eq "foreign wrapper untouched" "$(/usr/bin/tail -n1 "$H/.local/bin/earbuds")" "echo not ours"
+assert_eq "foreign wrapper untouched" "$(/usr/bin/tail -n1 "$H/.local/bin/tmn")" "echo not ours"
 
 step "S17: a silent channel is discovered, remembered, and cleaned up"
 new_home
@@ -848,7 +852,7 @@ log_reset
 make_earctl
 run_install --yes
 assert_rc "install for discovery" 0 "$?"
-STATE_CH=$H/.local/state/io.github.saiaungminkhant.nothing-buds/channels/AA_BB_CC_DD_EE_FF
+STATE_CH=$H/.local/state/io.github.coryblische.too-much-nothing/channels/AA_BB_CC_DD_EE_FF
 echo 15 >"$FAKE/works-on-channel"
 echo yes >"$FAKE/bt-connected"
 
@@ -882,14 +886,14 @@ assert_line "discovered channel used" "--channel 15" "$FAKE/log"
 assert_no_line "default no longer tried" "--channel 16" "$FAKE/log"
 
 # A hand-pinned channel wins over the discovered one and blocks probing.
-echo 12 >"$H/.config/earbuds/channel"
+echo 12 >"$H/.config/too-much-nothing/channel"
 log_reset
 out=$(wrap discover-channel 2>/dev/null)
 assert_eq "pinned channel is not probed over" "$(echo "$out" | /usr/bin/jq -r .discovered)" "false"
 assert_eq "pinned reason" "$(echo "$out" | /usr/bin/jq -r .reason)" "pinned"
 assert_eq "pinned channel reported" "$(echo "$out" | /usr/bin/jq -r .channel)" "12"
 assert_no_line "no probe while pinned" "auto-connect" "$FAKE/log"
-/usr/bin/rm -f -- "$H/.config/earbuds/channel"
+/usr/bin/rm -f -- "$H/.config/too-much-nothing/channel"
 
 # A symlink at the state path is never written through.
 /usr/bin/rm -f -- "$STATE_CH"
@@ -926,7 +930,7 @@ log_reset
 run_uninstall --yes
 assert_rc "uninstall after discovery" 0 "$?"
 assert_gone "discovered channel removed" "$STATE_CH"
-assert_gone "state dir removed" "$H/.local/state/io.github.saiaungminkhant.nothing-buds"
+assert_gone "state dir removed" "$H/.local/state/io.github.coryblische.too-much-nothing"
 /usr/bin/rm -f -- "$FAKE/works-on-channel" "$FAKE/last-channel" "$FAKE/bt-connected"
 
 step "S18: config and state files are read through one no-follow, non-blocking descriptor"
@@ -937,7 +941,7 @@ read_lib() { # file max
   ( source "$SUBJ/lib.sh"; v=""; nb_read_bounded "$1" "$2" v; printf '%s:%s' "$?" "$v" )
 }
 read_wrap() { # file max
-  ( eval "$(/usr/bin/sed -n '/^NB_PERL=/p; /^nb_read_bounded() {$/,/^}$/p' "$SUBJ/earbuds")"
+  ( eval "$(/usr/bin/sed -n '/^NB_PERL=/p; /^nb_read_bounded() {$/,/^}$/p' "$SUBJ/tmn")"
     v=""; nb_read_bounded "$1" "$2" v; printf '%s:%s' "$?" "$v" )
 }
 # Exported for the FIFO case, which runs under timeout in a child bash.
@@ -971,8 +975,8 @@ assert_eq "PERL5OPT cannot inject code" \
   "$(PERL5OPT=-Mstrict=bogus read_lib "$R/line" 64)" "0:AA:BB:CC:DD:EE:FF"
 # The recorded earctl path is not read through a symlink either.
 new_home
-S=$H/.local/state/io.github.saiaungminkhant.nothing-buds
-/usr/bin/mkdir -p -- "$S" "$H/.config/earbuds"
+S=$H/.local/state/io.github.coryblische.too-much-nothing
+/usr/bin/mkdir -p -- "$S" "$H/.config/too-much-nothing"
 printf '%s\n' "$FAKE/evil-earctl" >"$T/evil-bin"
 /usr/bin/ln -s -- "$T/evil-bin" "$S/earctl-bin"
 printf '#!/bin/bash\necho "evil-earctl $*" >>"%s/log"\n' "$FAKE" >"$FAKE/evil-earctl"
@@ -1023,8 +1027,8 @@ make_earctl
 log_reset
 run_install --yes
 assert_rc "install with two buds paired" 0 "$?"
-assert_gone "no address pinned when several buds are paired" "$H/.config/earbuds/address"
-SD=$H/.local/state/io.github.saiaungminkhant.nothing-buds
+assert_gone "no address pinned when several buds are paired" "$H/.config/too-much-nothing/address"
+SD=$H/.local/state/io.github.coryblische.too-much-nothing
 
 # list: both buds, nothing else, link state per address.
 echo no >"$MD/conn-$A"
@@ -1094,26 +1098,26 @@ out=$(wrap status)
 assert_eq "pick wins without --address" "$(echo "$out" | /usr/bin/jq -r .address)" "$A"
 out=$(wrap --address "$B" status)
 assert_eq "--address still wins over the pick" "$(echo "$out" | /usr/bin/jq -r .address)" "$B"
-echo "$B" >"$H/.config/earbuds/address"
+echo "$B" >"$H/.config/too-much-nothing/address"
 out=$(wrap status)
 assert_eq "pick wins over the config file" "$(echo "$out" | /usr/bin/jq -r .address)" "$A"
 assert_eq "list reports the config address" "$(wrap list | /usr/bin/jq -r .config)" "$B"
-/usr/bin/rm -f -- "$H/.config/earbuds/address"
+/usr/bin/rm -f -- "$H/.config/too-much-nothing/address"
 # The config file is a default: it loses to connected buds while its own
 # are not connected, and wins while they are.
 wrap select none >/dev/null
-echo "$A" >"$H/.config/earbuds/address"
+echo "$A" >"$H/.config/too-much-nothing/address"
 echo no >"$MD/conn-$A"
 assert_eq "config buds disconnected: connected ones win" "$(wrap status | /usr/bin/jq -r .address)" "$B"
 echo yes >"$MD/conn-$A"
-echo "$B" >"$H/.config/earbuds/address"
+echo "$B" >"$H/.config/too-much-nothing/address"
 assert_eq "config buds connected: they win over the first listed" "$(wrap status | /usr/bin/jq -r .address)" "$B"
 echo no >"$MD/conn-$A"
 echo no >"$MD/conn-$B"
 assert_eq "nothing connected: config buds" "$(wrap status | /usr/bin/jq -r .address)" "$B"
 echo yes >"$MD/conn-$A"
 echo yes >"$MD/conn-$B"
-/usr/bin/rm -f -- "$H/.config/earbuds/address"
+/usr/bin/rm -f -- "$H/.config/too-much-nothing/address"
 wrap select "$A" >/dev/null
 wrap select 'AA:BB;rm -rf' >/dev/null 2>&1
 assert_rc "select refuses a malformed address" 64 "$?"
@@ -1151,11 +1155,11 @@ log_reset
 wrap --address "$A" status >/dev/null
 assert_line "A: its own channel, session moved back" "--bluetooth-address $A --channel 15" "$FAKE/log"
 # Same buds on another channel is another session too.
-echo 12 >"$H/.config/earbuds/channel"
+echo 12 >"$H/.config/too-much-nothing/channel"
 log_reset
 wrap --address "$A" status >/dev/null
 assert_line "pinned channel change reopens the session" "--bluetooth-address $A --channel 12" "$FAKE/log"
-/usr/bin/rm -f -- "$H/.config/earbuds/channel"
+/usr/bin/rm -f -- "$H/.config/too-much-nothing/channel"
 # The 0.0.8 single channel file still serves buds with none of their own.
 echo 13 >"$SD/channel"
 log_reset
@@ -1188,6 +1192,35 @@ assert_gone "pick removed" "$SD/selected"
 assert_gone "channels removed" "$SD/channels"
 assert_gone "state dir removed" "$SD"
 /usr/bin/rm -f -- "$FAKE/last-channel" "$FAKE/last-address"
+
+step "S20: the fork imports the upstream pick and channels once"
+new_home
+make_earctl
+U=$H/.local/state/io.github.saiaungminkhant.nothing-buds
+/usr/bin/mkdir -p -- "$U/channels"
+echo "AA:BB:CC:DD:EE:02" >"$U/selected"
+echo 15 >"$U/channels/AA_BB_CC_DD_EE_01"
+echo 99 >"$U/channels/AA_BB_CC_DD_EE_02"
+echo 16 >"$U/channels/not-an-address"
+echo "keep" >"$T/imp-victim"
+/usr/bin/ln -s -- "$T/imp-victim" "$U/channel"
+run_install --yes
+assert_rc "install with upstream state present" 0 "$?"
+SD=$H/.local/state/io.github.coryblische.too-much-nothing
+assert_eq "pick imported" "$(/usr/bin/cat "$SD/selected")" "AA:BB:CC:DD:EE:02"
+assert_eq "valid channel imported" "$(/usr/bin/cat "$SD/channels/AA_BB_CC_DD_EE_01")" "15"
+assert_gone "out-of-range channel skipped" "$SD/channels/AA_BB_CC_DD_EE_02"
+assert_gone "badly named file skipped" "$SD/channels/not-an-address"
+assert_gone "symlinked legacy channel not followed" "$SD/channel"
+assert_no_line "imports are not in the manifest" "selected" "$(manifest_of)"
+assert_eq "upstream state untouched" "$(/usr/bin/cat "$U/selected")" "AA:BB:CC:DD:EE:02"
+echo "AA:BB:CC:DD:EE:01" >"$SD/selected"
+run_install --yes >/dev/null 2>&1
+assert_eq "existing pick not overwritten" "$(/usr/bin/cat "$SD/selected")" "AA:BB:CC:DD:EE:01"
+/usr/bin/rm -rf -- "$H/.config/pulse"
+run_uninstall --yes
+assert_rc "uninstall after import" 0 "$?"
+assert_gone "imported state removed" "$SD"
 
 # ------------------------------------------------------------------ verdict
 

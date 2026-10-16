@@ -41,8 +41,10 @@ NB_MKDIR=/usr/bin/mkdir
 NB_MV=/usr/bin/mv
 NB_RM=/usr/bin/rm
 NB_EARCTL_FALLBACK=/usr/bin/earctl
-NB_EARCTL_LOCAL=$HOME/.local/bin/earctl
-NB_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/io.github.saiaungminkhant.nothing-buds
+NB_EARCTL_LOCAL=${XDG_DATA_HOME:-$HOME/.local/share}/io.github.coryblische.too-much-nothing/bin/earctl
+# This plugin's earctl server, apart from any other on the default 8787.
+NB_ENDPOINT=http://127.0.0.1:8797
+NB_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/io.github.coryblische.too-much-nothing
 NB_EARCTL_BIN_FILE=$NB_STATE_DIR/earctl-bin
 # Channel found by `discover-channel`, one file per address
 # (AA_BB_CC_DD_EE_FF). Ours, so uninstall removes them.
@@ -51,7 +53,7 @@ NB_CHANNELS_DIR=$NB_STATE_DIR/channels
 NB_LEGACY_CHANNEL_FILE=$NB_STATE_DIR/channel
 # Address picked in the panel (`select`). Ours, so uninstall removes it.
 NB_SELECTED_FILE=$NB_STATE_DIR/selected
-NB_CONF_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/earbuds
+NB_CONF_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/too-much-nothing
 
 # Names that look like a Nothing or CMF product. Panel.qml carries the same
 # pattern, so both pick the same buds.
@@ -107,7 +109,7 @@ nb_read_bounded() {
 
 usage() {
   printf '%s\n' \
-    "usage: earbuds [--address AA:BB:CC:DD:EE:FF] [--channel N] <command> [args...]" \
+    "usage: tmn [--address AA:BB:CC:DD:EE:FF] [--channel N] <command> [args...]" \
     "" \
     "commands:" \
     "  status                  compact JSON snapshot for the bar widget" \
@@ -143,25 +145,25 @@ positional=()
 while (( $# > 0 )); do
   case $1 in
     --address)
-      [[ -n ${2:-} ]] || { printf 'nothing-buds: --address needs a value\n' >&2; exit 64; }
+      [[ -n ${2:-} ]] || { printf 'tmn: --address needs a value\n' >&2; exit 64; }
       addr_arg=$2
       shift 2 ;;
     --channel)
-      [[ -n ${2:-} ]] || { printf 'nothing-buds: --channel needs a value\n' >&2; exit 64; }
+      [[ -n ${2:-} ]] || { printf 'tmn: --channel needs a value\n' >&2; exit 64; }
       channel_arg=$2
       shift 2 ;;
     -h|--help) usage; exit 0 ;;
-    --*) printf 'nothing-buds: unknown option: %s\n' "$1" >&2; exit 64 ;;
+    --*) printf 'tmn: unknown option: %s\n' "$1" >&2; exit 64 ;;
     *) positional+=("$1"); shift ;;
   esac
 done
 set -- "${positional[@]}"
 
 if [[ -n ${addr_arg:-} ]]; then
-  nb_valid_addr "$addr_arg" || { printf 'nothing-buds: --address must look like AA:BB:CC:DD:EE:FF\n' >&2; exit 64; }
+  nb_valid_addr "$addr_arg" || { printf 'tmn: --address must look like AA:BB:CC:DD:EE:FF\n' >&2; exit 64; }
 fi
 if [[ -n ${channel_arg:-} ]]; then
-  nb_valid_channel "$channel_arg" || { printf 'nothing-buds: --channel must be a number from 1 to 63\n' >&2; exit 64; }
+  nb_valid_channel "$channel_arg" || { printf 'tmn: --channel must be a number from 1 to 63\n' >&2; exit 64; }
 fi
 
 # ------------------------------------------------------- address and channel
@@ -173,7 +175,7 @@ read_addr_file() {
   nb_read_bounded "$file" 64 value || value=""
   value=${value%$'\r'}
   if [[ -n $value ]] && ! nb_valid_addr "$value"; then
-    printf 'nothing-buds: invalid address in %s; ignoring it\n' "$file" >&2
+    printf 'tmn: invalid address in %s; ignoring it\n' "$file" >&2
     value=""
   fi
   printf '%s' "${value^^}"
@@ -244,7 +246,7 @@ read_channel_file() {
     value=""
   fi
   if [[ -n $value ]] && ! nb_valid_channel "$value"; then
-    printf 'nothing-buds: invalid channel in %s; ignoring it\n' "$file" >&2
+    printf 'tmn: invalid channel in %s; ignoring it\n' "$file" >&2
     value=""
   fi
   printf -v "$var" '%s' "$value"
@@ -308,6 +310,9 @@ fi
     EARCTL=$NB_EARCTL_LOCAL
 }
 
+# Every earctl call goes to this plugin's server.
+EARCTL_RUN=("$EARCTL" --endpoint "$NB_ENDPOINT")
+
 # ------------------------------------------------------------------ BlueZ
 
 # No grep -q: quitting early breaks the pipe and pipefail turns a match into a failure.
@@ -324,13 +329,13 @@ bt_name()     { bt_info | $NB_SED -n 's/^[[:space:]]*Name: //p' | $NB_HEAD -n 1;
 # about 0.1s, so it runs once per new session rather than on every read. A
 # model it cannot map is not an error.
 ensure_model() {
-  $NB_TIMEOUT --kill-after=2 10 "$EARCTL" detect >/dev/null 2>&1 || true
+  $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" detect >/dev/null 2>&1 || true
 }
 
 # Model base earctl resolved for the session (B179, B173, ...), empty if
 # none. A local HTTP call, no round trip to the buds.
 model_base() {
-  $NB_TIMEOUT --kill-after=2 10 "$EARCTL" session 2>/dev/null | $NB_HEAD -c 8192 |
+  $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" session 2>/dev/null | $NB_HEAD -c 8192 |
     $NB_JQ -r '.model.base // empty' 2>/dev/null | $NB_HEAD -c 16
 }
 
@@ -338,7 +343,7 @@ model_base() {
 # port_path is bluer's RFCOMM socket address, "[2C:BE:EE:6C:10:44]:15".
 # Empty when there is no session or the shape is not recognised.
 session_target() {
-  $NB_TIMEOUT --kill-after=2 10 "$EARCTL" session 2>/dev/null | $NB_HEAD -c 8192 |
+  $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" session 2>/dev/null | $NB_HEAD -c 8192 |
     $NB_JQ -r '.port_path // empty | strings
       | capture("^\\[(?<a>([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})\\]:(?<c>[0-9]{1,2})$")
       | "\(.a | ascii_upcase) \(.c)"' 2>/dev/null | $NB_HEAD -c 32
@@ -351,21 +356,21 @@ ensure_session() {
   local target
   target=$(session_target)
   if [[ -n $target && $target != "$ADDR $((10#$CHANNEL))" ]]; then
-    $NB_TIMEOUT --kill-after=2 10 "$EARCTL" disconnect >/dev/null 2>&1 && $NB_SLEEP 0.5
+    $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" disconnect >/dev/null 2>&1 && $NB_SLEEP 0.5
   # Probe with a real read: `session` keeps reporting active after the buds disconnect.
-  elif $NB_TIMEOUT --kill-after=2 10 "$EARCTL" anc get >/dev/null 2>&1; then
+  elif $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" anc get >/dev/null 2>&1; then
     return 0
   fi
 
   # auto-connect refuses with 409 while a dead session is registered.
-  $NB_TIMEOUT --kill-after=2 10 "$EARCTL" disconnect >/dev/null 2>&1
+  $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" disconnect >/dev/null 2>&1
 
   # A link that just came up does not accept RFCOMM immediately.
   local attempt
   for attempt in 1 2 3 4; do
-    $NB_TIMEOUT --kill-after=2 10 "$EARCTL" auto-connect --bluetooth-address "$ADDR" --channel "$CHANNEL" >/dev/null 2>&1 &&
-      $NB_TIMEOUT --kill-after=2 10 "$EARCTL" anc get >/dev/null 2>&1 && { ensure_model; return 0; }
-    $NB_TIMEOUT --kill-after=2 10 "$EARCTL" disconnect >/dev/null 2>&1
+    $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" auto-connect --bluetooth-address "$ADDR" --channel "$CHANNEL" >/dev/null 2>&1 &&
+      $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" anc get >/dev/null 2>&1 && { ensure_model; return 0; }
+    $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" disconnect >/dev/null 2>&1
     $NB_SLEEP 0.6
   done
   return 1
@@ -418,7 +423,7 @@ codec_set() {
   local want=${1:-} prof
   [[ -n $want ]] || return 64
   prof=$(codec_map | $NB_AWK -F'\t' -v w="${want,,}" '$1 == w {print $2; exit}')
-  [[ -n $prof ]] || { printf 'nothing-buds: codec %s not available\n' "$want" >&2; return 1; }
+  [[ -n $prof ]] || { printf 'tmn: codec %s not available\n' "$want" >&2; return 1; }
   $NB_TIMEOUT --kill-after=2 10 "$NB_PACTL" set-card-profile "$NB_CARD" "$prof" >/dev/null 2>&1 || return 1
   # Switching renegotiates the A2DP link and the sink vanishes for 0.4 to 4s
   # on CMF Buds 2. Wait for it, bounded, so the echoed status is right.
@@ -446,12 +451,12 @@ cmd_status() {
   # The last two are model-gated. A model without them refuses in a few
   # ms and the field stays null, so the panel omits that control.
   local anc battery latency inear bass supermic base
-  anc=$($NB_TIMEOUT --kill-after=2 10 "$EARCTL" anc get 2>/dev/null | $NB_HEAD -c 8192)
-  battery=$($NB_TIMEOUT --kill-after=2 10 "$EARCTL" battery 2>/dev/null | $NB_HEAD -c 8192)
-  latency=$($NB_TIMEOUT --kill-after=2 10 "$EARCTL" latency get 2>/dev/null | $NB_HEAD -c 8192)
-  inear=$($NB_TIMEOUT --kill-after=2 10 "$EARCTL" in-ear get 2>/dev/null | $NB_HEAD -c 8192)
-  bass=$($NB_TIMEOUT --kill-after=2 10 "$EARCTL" enhanced-bass get 2>/dev/null | $NB_HEAD -c 8192)
-  supermic=$($NB_TIMEOUT --kill-after=2 10 "$EARCTL" super-mic get 2>/dev/null | $NB_HEAD -c 8192)
+  anc=$($NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" anc get 2>/dev/null | $NB_HEAD -c 8192)
+  battery=$($NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" battery 2>/dev/null | $NB_HEAD -c 8192)
+  latency=$($NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" latency get 2>/dev/null | $NB_HEAD -c 8192)
+  inear=$($NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" in-ear get 2>/dev/null | $NB_HEAD -c 8192)
+  bass=$($NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" enhanced-bass get 2>/dev/null | $NB_HEAD -c 8192)
+  supermic=$($NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" super-mic get 2>/dev/null | $NB_HEAD -c 8192)
   base=$(model_base)
 
   # earctl serializes AncLevel as a JSON string, not an object.
@@ -500,15 +505,15 @@ cmd_ring() {
   ensure_session || return 1
   local side=${1:-}
   if [[ -n $side ]]; then
-    printf 'y\n' | $NB_TIMEOUT --kill-after=2 15 "$EARCTL" ring --enable true --side "$side" >/dev/null 2>&1
+    printf 'y\n' | $NB_TIMEOUT --kill-after=2 15 "${EARCTL_RUN[@]}" ring --enable true --side "$side" >/dev/null 2>&1
   else
-    printf 'y\n' | $NB_TIMEOUT --kill-after=2 15 "$EARCTL" ring --enable true >/dev/null 2>&1
+    printf 'y\n' | $NB_TIMEOUT --kill-after=2 15 "${EARCTL_RUN[@]}" ring --enable true >/dev/null 2>&1
   fi
 }
 
 cmd_unring() {
   ensure_session || return 1
-  $NB_TIMEOUT --kill-after=2 15 "$EARCTL" ring --enable false >/dev/null 2>&1
+  $NB_TIMEOUT --kill-after=2 15 "${EARCTL_RUN[@]}" ring --enable false >/dev/null 2>&1
 }
 
 cmd_connect() {
@@ -528,7 +533,7 @@ cmd_disconnect() {
   if [[ -n $EARCTL ]]; then
     local target
     target=$(session_target)
-    [[ ${target%% *} != "$ADDR" ]] || $NB_TIMEOUT --kill-after=2 10 "$EARCTL" disconnect >/dev/null 2>&1
+    [[ ${target%% *} != "$ADDR" ]] || $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" disconnect >/dev/null 2>&1
   fi
   $NB_TIMEOUT --kill-after=2 25 "$NB_BT" disconnect "$ADDR" >/dev/null 2>&1
   cmd_status
@@ -547,19 +552,19 @@ cmd_set() {
     return 0
   fi
   case ${1:-} in
-    latency) $NB_TIMEOUT --kill-after=2 10 "$EARCTL" latency set "${2:-false}" >/dev/null 2>&1 ;;
-    in-ear)  $NB_TIMEOUT --kill-after=2 10 "$EARCTL" in-ear set "${2:-false}" >/dev/null 2>&1 ;;
-    anc)     $NB_TIMEOUT --kill-after=2 10 "$EARCTL" anc set "${2:-off}" >/dev/null 2>&1 ;;
-    super-mic) $NB_TIMEOUT --kill-after=2 10 "$EARCTL" super-mic set "${2:-false}" >/dev/null 2>&1 ;;
+    latency) $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" latency set "${2:-false}" >/dev/null 2>&1 ;;
+    in-ear)  $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" in-ear set "${2:-false}" >/dev/null 2>&1 ;;
+    anc)     $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" anc set "${2:-off}" >/dev/null 2>&1 ;;
+    super-mic) $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" super-mic set "${2:-false}" >/dev/null 2>&1 ;;
     enhanced-bass)
       # On Ear (3) bass and spatial audio are exclusive and the second write
       # wins, so clear spatial first. CMF Buds 2 keeps both.
-      [[ ${2:-false} == true && $(model_base) == B173 ]] && $NB_TIMEOUT --kill-after=2 10 "$EARCTL" spatial-audio off >/dev/null 2>&1
-      $NB_TIMEOUT --kill-after=2 10 "$EARCTL" enhanced-bass set --enabled "${2:-false}" --level "${3:-2}" >/dev/null 2>&1 ;;
+      [[ ${2:-false} == true && $(model_base) == B173 ]] && $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" spatial-audio off >/dev/null 2>&1
+      $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" enhanced-bass set --enabled "${2:-false}" --level "${3:-2}" >/dev/null 2>&1 ;;
     spatial)
       # The same the other way round, Ear (3) only.
-      [[ ${2:-off} == fixed && $(model_base) == B173 ]] && $NB_TIMEOUT --kill-after=2 10 "$EARCTL" enhanced-bass set --enabled false >/dev/null 2>&1
-      $NB_TIMEOUT --kill-after=2 10 "$EARCTL" spatial-audio "${2:-off}" >/dev/null 2>&1 ;;
+      [[ ${2:-off} == fixed && $(model_base) == B173 ]] && $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" enhanced-bass set --enabled false >/dev/null 2>&1
+      $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" spatial-audio "${2:-off}" >/dev/null 2>&1 ;;
     *)       printf 'unknown setting: %s\n' "${1:-}" >&2; return 64 ;;
   esac
   cmd_status
@@ -572,9 +577,9 @@ cmd_cycle() {
     return 0
   fi
   local now next
-  now=$($NB_TIMEOUT --kill-after=2 10 "$EARCTL" anc get 2>/dev/null | $NB_TR -d '"' | $NB_HEAD -c 256)
+  now=$($NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" anc get 2>/dev/null | $NB_TR -d '"' | $NB_HEAD -c 256)
   # A read straight after a set can come back empty; retry once.
-  [[ -n $now ]] || { $NB_SLEEP 0.3; now=$($NB_TIMEOUT --kill-after=2 10 "$EARCTL" anc get 2>/dev/null | $NB_TR -d '"' | $NB_HEAD -c 256); }
+  [[ -n $now ]] || { $NB_SLEEP 0.3; now=$($NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" anc get 2>/dev/null | $NB_TR -d '"' | $NB_HEAD -c 256); }
   case $now in
     off)                 next=transparency ;;
     transparency)        next=nc-high ;;
@@ -582,7 +587,7 @@ cmd_cycle() {
     # Unreadable or a level this cycle does not cover: report, change nothing.
     *)                   cmd_status; return 0 ;;
   esac
-  $NB_TIMEOUT --kill-after=2 10 "$EARCTL" anc set "$next" >/dev/null 2>&1
+  $NB_TIMEOUT --kill-after=2 10 "${EARCTL_RUN[@]}" anc set "$next" >/dev/null 2>&1
   cmd_status
 }
 
@@ -640,9 +645,9 @@ cmd_discover() {
     printf 'probing channel %s (%s of %s)\n' "$ch" "$i" "$total" >&2
     # Tearing down a live session and reconnecting at once fails with EBUSY
     # on real buds, as ensure_session found. Give the socket a moment.
-    $NB_TIMEOUT --kill-after=2 5 "$EARCTL" disconnect >/dev/null 2>&1 && $NB_SLEEP 0.5
-    $NB_TIMEOUT --kill-after=2 8 "$EARCTL" auto-connect --bluetooth-address "$ADDR" --channel "$ch" >/dev/null 2>&1 || continue
-    $NB_TIMEOUT --kill-after=2 8 "$EARCTL" battery 2>/dev/null | $NB_HEAD -c 8192 | $NB_JQ -e 'type == "object"' >/dev/null 2>&1 || continue
+    $NB_TIMEOUT --kill-after=2 5 "${EARCTL_RUN[@]}" disconnect >/dev/null 2>&1 && $NB_SLEEP 0.5
+    $NB_TIMEOUT --kill-after=2 8 "${EARCTL_RUN[@]}" auto-connect --bluetooth-address "$ADDR" --channel "$ch" >/dev/null 2>&1 || continue
+    $NB_TIMEOUT --kill-after=2 8 "${EARCTL_RUN[@]}" battery 2>/dev/null | $NB_HEAD -c 8192 | $NB_JQ -e 'type == "object"' >/dev/null 2>&1 || continue
     if save_found_channel "$ch"; then
       discover_json true "$ch" true ""
     else
@@ -650,7 +655,7 @@ cmd_discover() {
     fi
     return 0
   done
-  $NB_TIMEOUT --kill-after=2 5 "$EARCTL" disconnect >/dev/null 2>&1
+  $NB_TIMEOUT --kill-after=2 5 "${EARCTL_RUN[@]}" disconnect >/dev/null 2>&1
   discover_json false null false "no channel answered"
   return 0
 }
@@ -682,14 +687,14 @@ cmd_select() {
   local want=${1:-}
   if [[ $want == none ]]; then
     if [[ -L $NB_SELECTED_FILE ]]; then
-      printf 'nothing-buds: refusing to remove %s: it is a symlink\n' "$NB_SELECTED_FILE" >&2
+      printf 'tmn: refusing to remove %s: it is a symlink\n' "$NB_SELECTED_FILE" >&2
       return 1
     fi
     $NB_RM -f -- "$NB_SELECTED_FILE" 2>/dev/null || return 1
   else
-    nb_valid_addr "$want" || { printf 'nothing-buds: select needs AA:BB:CC:DD:EE:FF or none\n' >&2; return 64; }
+    nb_valid_addr "$want" || { printf 'tmn: select needs AA:BB:CC:DD:EE:FF or none\n' >&2; return 64; }
     write_state_line "$NB_STATE_DIR" "$NB_SELECTED_FILE" "${want^^}" ||
-      { printf 'nothing-buds: could not write %s\n' "$NB_SELECTED_FILE" >&2; return 1; }
+      { printf 'tmn: could not write %s\n' "$NB_SELECTED_FILE" >&2; return 1; }
   fi
   cmd_list
 }
@@ -710,9 +715,9 @@ case ${1:-status} in
   select)    shift; cmd_select "$@" ;;
   *)
     if [[ -n $EARCTL ]]; then
-      exec "$EARCTL" "$@"
+      exec "${EARCTL_RUN[@]}" "$@"
     else
-      printf 'nothing-buds: earctl is not installed\n' >&2
+      printf 'tmn: earctl is not installed\n' >&2
       exit 64
     fi
     ;;

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.saiaungminkhant.nothing-buds",
-  "name": "Nothing Buds",
-  "version": "0.0.10",
-  "author": "Sai Aung Min Khant",
+  "id": "io.github.coryblische.too-much-nothing",
+  "name": "Too Much Nothing",
+  "version": "0.1.0",
+  "author": "Cory Blische",
   "license": "MIT",
-  "description": "ANC, battery and playback controls for Nothing and CMF earbuds",
+  "description": "Nothing and CMF earbuds controls for several pairs, plus system audio",
   "kinds": [
     "bar-widget"
   ],
@@ -13,8 +13,8 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Nothing Buds",
-    "description": "ANC, battery and playback controls for Nothing and CMF earbuds",
+    "displayName": "Too Much Nothing",
+    "description": "Nothing and CMF earbuds controls for several pairs, plus system audio",
     "category": "Audio",
     "allowMultiple": false,
     "defaultSection": "right"

@@ -7,7 +7,7 @@ After=bluetooth.target
 Type=simple
 # setup/install.sh renders this line from the earctl it resolved and
 # recorded, so the service and the wrapper always run the same binary.
-ExecStart=%EARCTL% server --addr 127.0.0.1:8787
+ExecStart=%EARCTL% server --addr 127.0.0.1:8797
 Restart=on-failure
 RestartSec=5
 

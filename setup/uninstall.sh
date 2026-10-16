@@ -32,7 +32,7 @@ usage() {
   printf '%s\n' \
     "usage: uninstall.sh [--yes] [--keep-earctl]" \
     "" \
-    "Removes what the Nothing Buds plugin installed:" \
+    "Removes what the Too Much Nothing plugin installed:" \
     "  $NB_UNIT   stopped, disabled and removed (if this plugin" \
     "                installed it)" \
     "  $NB_WRAPPER        removed (if this plugin installed it)" \
@@ -118,8 +118,8 @@ else
 fi
 
 if [[ $unit_owned == true ]]; then
-  say "Stopping and removing earctl.service"
-  $NB_SYSTEMCTL --user disable --now earctl.service >/dev/null 2>&1 || true
+  say "Stopping and removing tmn-earctl.service"
+  $NB_SYSTEMCTL --user disable --now tmn-earctl.service >/dev/null 2>&1 || true
   nb_remove_owned_file "$NB_UNIT" "$unit_sha"
   case $? in
     1|2) note "  left in place (see note above)"; partial=1 ;;
@@ -127,7 +127,7 @@ if [[ $unit_owned == true ]]; then
   esac
   $NB_SYSTEMCTL --user daemon-reload >/dev/null 2>&1 || true
 else
-  note "earctl.service was not installed by this plugin; leaving it running."
+  note "tmn-earctl.service was not installed by this plugin; leaving it running."
 fi
 
 # ------------------------------------------------------------------ wrapper
@@ -135,7 +135,7 @@ wrapper_sha=""
 if [[ $manifest_mode == true ]]; then
   wrapper_sha=$(nb_manifest_sha "$NB_WRAPPER")
 else
-  shipped_wrapper=$(nb_sha_file "$here/earbuds") || shipped_wrapper=""
+  shipped_wrapper=$(nb_sha_file "$here/tmn") || shipped_wrapper=""
   installed_wrapper=$(nb_sha_file "$NB_WRAPPER" 2>/dev/null) || installed_wrapper=""
   if [[ -n $installed_wrapper ]] &&
      { [[ $installed_wrapper == "$shipped_wrapper" ]] || nb_is_shipped_sha "$installed_wrapper"; }; then
@@ -201,9 +201,9 @@ elif [[ $manifest_mode == true ]]; then
       note "  package removal failed; the record is kept so a retry can find it."
       partial=1
     fi
-  elif nb_manifest_has file "$NB_BIN_DIR/earctl"; then
+  elif nb_manifest_has file "$NB_EARCTL_BUILT"; then
     say "Removing the earctl binary this plugin built"
-    nb_remove_owned_file "$NB_BIN_DIR/earctl" "$(nb_manifest_sha "$NB_BIN_DIR/earctl")"
+    nb_remove_owned_file "$NB_EARCTL_BUILT" "$(nb_manifest_sha "$NB_EARCTL_BUILT")"
     case $? in
       1|2|6) partial=1 ;;
     esac
@@ -271,8 +271,8 @@ if [[ $manifest_mode == true ]]; then
   for (( i = ${#owned_dirs[@]} - 1; i >= 0; i-- )); do
     [[ -d ${owned_dirs[$i]} ]] || continue
     # A deliberately kept source binary also needs its parent directories.
-    if [[ $keep_earctl == true && -e $NB_BIN_DIR/earctl &&
-          $NB_BIN_DIR/earctl == "${owned_dirs[$i]}/"* ]]; then
+    if [[ $keep_earctl == true && -e $NB_EARCTL_BUILT &&
+          $NB_EARCTL_BUILT == "${owned_dirs[$i]}/"* ]]; then
       continue
     fi
     $NB_RMDIR -- "${owned_dirs[$i]}" 2>/dev/null ||

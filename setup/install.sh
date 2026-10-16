@@ -47,8 +47,8 @@ usage() {
   printf '%s\n' \
     "usage: install.sh [--yes] [--replace-existing] [--check]" \
     "" \
-    "Installs the Nothing Buds plugin's pieces outside its QML folder:" \
-    "  $NB_WRAPPER        the earbuds helper command" \
+    "Installs the Too Much Nothing plugin's pieces outside its QML folder:" \
+    "  $NB_WRAPPER        the tmn helper command" \
     "  $NB_UNIT           systemd --user service (earctl RFCOMM server)" \
     "  $NB_CONF_DIR/            config: pinned earbuds address, RFCOMM channel" \
     "  earctl                   Nothing RFCOMM tool, from pinned source (Git and Rust required);" \
@@ -68,16 +68,16 @@ check_installed() {
   local want got
   [[ -x $NB_BT && -x $NB_JQ && -x $NB_PERL ]] || return 1
   [[ -e $NB_WRAPPER && ! -L $NB_WRAPPER && -f $NB_WRAPPER && -x $NB_WRAPPER ]] || return 1
-  want=$(nb_sha_file "$here/earbuds") || return 1
+  want=$(nb_sha_file "$here/tmn") || return 1
   got=$(nb_sha_file "$NB_WRAPPER") || return 1
   [[ $want == "$got" ]] || return 1
   [[ -e $NB_UNIT && ! -L $NB_UNIT && -f $NB_UNIT ]] || return 1
   [[ -f $NB_EARCTL_FALLBACK && -x $NB_EARCTL_FALLBACK ]] ||
-    [[ -e $NB_BIN_DIR/earctl && ! -L $NB_BIN_DIR/earctl && -f $NB_BIN_DIR/earctl && -x $NB_BIN_DIR/earctl ]] ||
+    [[ -e $NB_EARCTL_BUILT && ! -L $NB_EARCTL_BUILT && -f $NB_EARCTL_BUILT && -x $NB_EARCTL_BUILT ]] ||
     return 1
   # An earctl this plugin built is out of date once the pin moves. A
   # user-provided one is theirs and never judged.
-  if nb_manifest_has file "$NB_BIN_DIR/earctl"; then
+  if nb_manifest_has file "$NB_EARCTL_BUILT"; then
     [[ $(built_earctl_commit) == "$earctl_commit" ]] || return 1
   fi
   return 0
@@ -91,7 +91,7 @@ built_earctl_commit() {
 }
 
 # Fetch the pinned commit, check it out detached, verify HEAD, build with the
-# committed lockfile, and publish over $NB_BIN_DIR/earctl. Terminal only.
+# committed lockfile, and publish over $NB_EARCTL_BUILT. Terminal only.
 build_earctl() {
   local earctl_cargo got
   earctl_cargo=$(nb_cargo) ||
@@ -112,10 +112,10 @@ build_earctl() {
   (cd "$build_tmp/earctl" && "$earctl_cargo" build --release --locked) ||
     nb_fail 2 "earctl build failed"
 
-  # Same ownership checks as everywhere else: a foreign ~/.local/bin/earctl is refused.
-  nb_install_file "$build_tmp/earctl/target/release/earctl" "$NB_BIN_DIR/earctl" 755
+  # Same ownership checks as everywhere else: a foreign file at that path is refused.
+  nb_install_file "$build_tmp/earctl/target/release/earctl" "$NB_EARCTL_BUILT" 755
   nb_write_owned "$NB_EARCTL_COMMIT_FILE" 644 "$earctl_commit"
-  NB_EARCTL_PATH=$NB_BIN_DIR/earctl
+  NB_EARCTL_PATH=$NB_EARCTL_BUILT
   NB_EARCTL_OURS=file
 }
 
@@ -152,6 +152,37 @@ done
 # The manifest lives here; created fresh on a new install.
 nb_ensure_dir_chain "$NB_STATE_DIR" || nb_fail $? "could not prepare $NB_STATE_DIR"
 
+# ------------------------------------------------------------ import
+# Carry over the earbuds pick and discovered channels from the Nothing Buds
+# plugin this one is forked from, once, when ours has none. These are state
+# files, ours by location like the wrapper's own, so they are not recorded
+# in the manifest. Each is read bounded and validated before it is written.
+nb_import_line() { # src dst validator
+  local value=""
+  [[ ! -e $2 && ! -L $2 ]] || return 0
+  nb_read_bounded "$1" 64 value || return 0
+  value=${value%$'\r'}
+  "$3" "$value" || return 0
+  local tmp
+  tmp=$($NB_MKTEMP "$($NB_DIRNAME -- "$2")/.import.XXXXXX") || return 0
+  printf '%s\n' "$value" >"$tmp" && $NB_MV -f -- "$tmp" "$2" || $NB_RM -f -- "$tmp"
+}
+upstream_state=${XDG_STATE_HOME:-$HOME/.local/state}/io.github.saiaungminkhant.nothing-buds
+if [[ -d $upstream_state && ! -L $upstream_state ]]; then
+  nb_import_line "$upstream_state/selected" "$NB_STATE_DIR/selected" nb_valid_addr
+  if [[ -d $upstream_state/channels && ! -L $upstream_state/channels ]] &&
+     [[ ! -e $NB_STATE_DIR/channels && ! -L $NB_STATE_DIR/channels ]]; then
+    $NB_MKDIR -- "$NB_STATE_DIR/channels" 2>/dev/null &&
+      for f in "$upstream_state"/channels/*; do
+        name=${f##*/}
+        [[ $name =~ ^([0-9A-F]{2}_){5}[0-9A-F]{2}$ ]] || continue
+        nb_import_line "$f" "$NB_STATE_DIR/channels/$name" nb_valid_channel
+      done
+  fi
+  # 0.0.8 and earlier kept one channel for every pair.
+  nb_import_line "$upstream_state/channel" "$NB_STATE_DIR/channel" nb_valid_channel
+fi
+
 # ----------------------------------------------------------------- earctl
 # Resolved first. /usr/bin is trusted by ownership; a user-location binary must be a regular file.
 NB_EARCTL_PATH=""
@@ -165,9 +196,9 @@ if [[ -f $NB_EARCTL_FALLBACK && -x $NB_EARCTL_FALLBACK ]]; then
     NB_EARCTL_OURS=pre
     nb_manifest_set pre "$NB_EARCTL_FALLBACK" || nb_fail 6 "could not record manifest"
   fi
-elif [[ -e $NB_BIN_DIR/earctl && ! -L $NB_BIN_DIR/earctl && -f $NB_BIN_DIR/earctl && -x $NB_BIN_DIR/earctl ]]; then
-  NB_EARCTL_PATH=$NB_BIN_DIR/earctl
-  if nb_manifest_has file "$NB_BIN_DIR/earctl"; then
+elif [[ -e $NB_EARCTL_BUILT && ! -L $NB_EARCTL_BUILT && -f $NB_EARCTL_BUILT && -x $NB_EARCTL_BUILT ]]; then
+  NB_EARCTL_PATH=$NB_EARCTL_BUILT
+  if nb_manifest_has file "$NB_EARCTL_BUILT"; then
     NB_EARCTL_OURS=file
     if [[ $(built_earctl_commit) != "$earctl_commit" ]]; then
       # Built by an earlier version of this plugin from an older pin.
@@ -176,7 +207,7 @@ elif [[ -e $NB_BIN_DIR/earctl && ! -L $NB_BIN_DIR/earctl && -f $NB_BIN_DIR/earct
     fi
   else
     NB_EARCTL_OURS=pre
-    nb_manifest_set pre "$NB_BIN_DIR/earctl" || nb_fail 6 "could not record manifest"
+    nb_manifest_set pre "$NB_EARCTL_BUILT" || nb_fail 6 "could not record manifest"
   fi
 fi
 
@@ -193,8 +224,8 @@ fi
 nb_write_owned "$NB_EARCTL_BIN_FILE" 644 "$NB_EARCTL_PATH"
 
 # ----------------------------------------------------------------- wrapper
-say "Installing the earbuds wrapper into $NB_BIN_DIR"
-nb_install_file "$here/earbuds" "$NB_WRAPPER" 755
+say "Installing the tmn wrapper into $NB_BIN_DIR"
+nb_install_file "$here/tmn" "$NB_WRAPPER" 755
 
 # ------------------------------------------------------------------ config
 if [[ -L $NB_CONF_DIR ]]; then
@@ -240,22 +271,22 @@ if ! [[ -r $NB_CONF_DIR/address ]]; then
 fi
 
 # -------------------------------------------------------------------- unit
-say "Installing and starting earctl.service"
+say "Installing and starting tmn-earctl.service"
 # ExecStart is rendered from the resolved earctl so the service and the
 # wrapper run the same binary; the render is verified.
-unit_body=$($NB_SED "s|^ExecStart=.*|ExecStart=$NB_EARCTL_PATH server --addr 127.0.0.1:8787|" "$here/earctl.service") ||
-  nb_fail 6 "could not read earctl.service"
+unit_body=$($NB_SED "s|^ExecStart=.*|ExecStart=$NB_EARCTL_PATH server --addr 127.0.0.1:8797|" "$here/tmn-earctl.service") ||
+  nb_fail 6 "could not read tmn-earctl.service"
 case $unit_body in
-  *"ExecStart=$NB_EARCTL_PATH server --addr 127.0.0.1:8787"*) ;;
+  *"ExecStart=$NB_EARCTL_PATH server --addr 127.0.0.1:8797"*) ;;
   *) nb_fail 6 "could not render ExecStart for $NB_EARCTL_PATH" ;;
 esac
 nb_write_owned "$NB_UNIT" 644 "$unit_body"
 $NB_SYSTEMCTL --user daemon-reload || nb_fail 6 "systemctl --user daemon-reload failed"
-if ! $NB_SYSTEMCTL --user enable --now earctl.service >/dev/null; then
+if ! $NB_SYSTEMCTL --user enable --now tmn-earctl.service >/dev/null; then
   # Rollback removes files, not systemd state, so undo that here.
-  $NB_SYSTEMCTL --user disable earctl.service >/dev/null 2>&1 || true
+  $NB_SYSTEMCTL --user disable tmn-earctl.service >/dev/null 2>&1 || true
   $NB_SYSTEMCTL --user daemon-reload >/dev/null 2>&1 || true
-  nb_fail 6 "could not enable earctl.service"
+  nb_fail 6 "could not enable tmn-earctl.service"
 fi
 
 say "Done."

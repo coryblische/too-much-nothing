@@ -17,7 +17,7 @@ import "Model.js" as Model
 // capped output, watchdog so busy/link state cannot wedge).
 Panel {
   id: root
-  moduleName: "io.github.saiaungminkhant.nothing-buds"
+  moduleName: "io.github.coryblische.too-much-nothing"
   manageIpc: false
 
   property var anchorItem: null
@@ -38,9 +38,11 @@ Panel {
   readonly property string homeDir: Quickshell.env("HOME") || ""
   readonly property string stateDir:
     (Quickshell.env("XDG_STATE_HOME") || homeDir + "/.local/state")
-    + "/io.github.saiaungminkhant.nothing-buds"
-  readonly property string earbudsBin: homeDir + "/.local/bin/earbuds"
-  readonly property string earctlLocal: homeDir + "/.local/bin/earctl"
+    + "/io.github.coryblische.too-much-nothing"
+  readonly property string earbudsBin: homeDir + "/.local/bin/tmn"
+  readonly property string earctlLocal:
+    (Quickshell.env("XDG_DATA_HOME") || homeDir + "/.local/share")
+    + "/io.github.coryblische.too-much-nothing/bin/earctl"
   readonly property string earctlUsr: "/usr/bin/earctl"
   // Omarchy's own launcher; /usr/share/omarchy/bin holds a symlink to it.
   readonly property string launchTui: "/usr/bin/omarchy-launch-tui"
@@ -142,7 +144,7 @@ Panel {
   function firstNote(text) {
     var lines = String(text || "").split("\n")
     for (var i = 0; i < lines.length; i++) {
-      var t = lines[i].replace(/^\s*nothing-buds:\s*/, "").trim()
+      var t = lines[i].replace(/^\s*tmn:\s*/, "").trim()
       if (t !== "") return t.length > 180 ? t.substring(0, 177) + "..." : t
     }
     return ""
@@ -199,8 +201,8 @@ Panel {
   }
   function hasDevice(address) { return deviceFor(address) !== null }
 
-  // The pick, kept by the wrapper in its state dir (`earbuds select`), and
-  // ~/.config/earbuds/address, both read through `earbuds list` at start.
+  // The pick, kept by the wrapper in its state dir (`tmn select`), and
+  // ~/.config/too-much-nothing/address, both read through `tmn list` at start.
   property string pickedAddress: ""
   property string configAddress: ""
   // A click made while the first list was in flight wins over it.
@@ -340,11 +342,11 @@ Panel {
       root.discoverNote = r.saved === true
         ? "Found your earbuds on channel " + r.channel + "."
         : "Your earbuds answer on channel " + r.channel + ", but it could not be saved. "
-          + "Pin it in ~/.config/earbuds/channel."
+          + "Pin it in ~/.config/too-much-nothing/channel."
       root.silentReads = 0
       Qt.callLater(root.refresh)
     } else if (r.reason === "pinned") {
-      root.discoverNote = "Channel " + r.channel + " is pinned in ~/.config/earbuds/channel "
+      root.discoverNote = "Channel " + r.channel + " is pinned in ~/.config/too-much-nothing/channel "
         + "but the earbuds never answer on it. Change or remove that file."
     } else if (r.reason === "link down") {
       root.discoverNote = ""
@@ -1044,9 +1046,9 @@ Panel {
             Text {
               width: parent.width
               text: "Setup installs a few things outside this plugin's folder:\n"
-                  + "the earbuds command in ~/.local/bin, a systemd --user\n"
+                  + "the tmn command in ~/.local/bin, a systemd --user\n"
                   + "service that talks to the earbuds, and a small config in\n"
-                  + "~/.config/earbuds. Nothing runs as root. If earctl is missing\n"
+                  + "~/.config/too-much-nothing. Nothing runs as root. If earctl is missing\n"
                   + "or older than the pin, setup offers a terminal to build it.\n"
                   + "Git and a Rust toolchain are required for the build."
               color: root.dim

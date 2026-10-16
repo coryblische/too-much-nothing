@@ -16,20 +16,24 @@
 
 # ---------------------------------------------------------------------- paths
 
-NB_ID=io.github.saiaungminkhant.nothing-buds
+NB_ID=io.github.coryblische.too-much-nothing
 NB_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/$NB_ID
 NB_MANIFEST=$NB_STATE_DIR/manifest
 NB_BACKUP_DIR=$NB_STATE_DIR/backup
 NB_BIN_DIR=$HOME/.local/bin
 NB_UNIT_DIR=$HOME/.config/systemd/user
-NB_CONF_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/earbuds
-NB_WRAPPER=$NB_BIN_DIR/earbuds
-NB_UNIT=$NB_UNIT_DIR/earctl.service
+NB_CONF_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/too-much-nothing
+NB_WRAPPER=$NB_BIN_DIR/tmn
+# earctl built by this plugin lives in its own data dir, never in
+# ~/.local/bin, so it cannot collide with another copy of earctl there.
+NB_EARCTL_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/$NB_ID/bin
+NB_EARCTL_BUILT=$NB_EARCTL_DIR/earctl
+NB_UNIT=$NB_UNIT_DIR/tmn-earctl.service
 NB_EARCTL_BIN_FILE=$NB_STATE_DIR/earctl-bin
 # Commit the plugin built earctl from, so a pin move triggers a rebuild.
 NB_EARCTL_COMMIT_FILE=$NB_STATE_DIR/earctl-commit
 
-# Absolute paths. setup/earbuds carries its own copy of the subset it needs;
+# Absolute paths. setup/tmn carries its own copy of the subset it needs;
 # test.sh rewrites both.
 
 NB_BT=/usr/bin/bluetoothctl
@@ -65,12 +69,12 @@ NB_RMDIR=/usr/bin/rmdir
 # (version 0.0.1). A match only ever permits replacing or removing the file.
 # Closed list: every version from 0.0.2 on records a manifest.
 NB_SHIPPED_SHAS=(
-  # setup/earbuds
+  # setup/tmn
   1436d9267ce4bf4e377d54ff4f79b7c6e9b31f141939a9c8c3047ec523121268
   8b8c67f774b1683588bdbb7ecf38bf6bcbcd1f7bee8f5412c008f1bdd684dc34
   6292c4412085aefceda16b2213cfc98d6cb2eaac9b8577dc9fdc94eb1f2126f8
   7fcd69f2e5fd7145358adb5bfbde0308542bcd11f780fafe8081623f73986408
-  # setup/earctl.service (ExecStart=%h/.local/bin/earctl ...)
+  # setup/tmn-earctl.service (ExecStart=%h/.local/bin/earctl ...)
   549b60883eb69893e7f8200c83e10b8852a0537c032ae0fe9cca82907aa55d58
 )
 
@@ -98,7 +102,7 @@ nb_cargo() {
 
 # ------------------------------------------------------------------ reporting
 
-nb_err() { printf 'nothing-buds: %s\n' "$*" >&2; }
+nb_err() { printf 'tmn: %s\n' "$*" >&2; }
 
 # Objects created so far this run, in creation order, as "type<TAB>path".
 NB_RUN_ADDED=()

@@ -4,11 +4,11 @@ import qs.Ui
 import qs.Ui as Ui
 import "Model.js" as Model
 
-// Bar host for the Nothing Buds details panel. Quattro tracks this object in
+// Bar host for the Too Much Nothing details panel. Quattro tracks this object in
 // the slot, so it owns the button and forwards the complete panel lifecycle.
 Ui.BarWidget {
   id: root
-  moduleName: "io.github.saiaungminkhant.nothing-buds"
+  moduleName: "io.github.coryblische.too-much-nothing"
 
   readonly property bool opened: panelLoader.item
     ? panelLoader.item.opened === true
