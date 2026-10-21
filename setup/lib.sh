@@ -16,7 +16,7 @@
 
 # ---------------------------------------------------------------------- paths
 
-NB_ID=io.github.coryblische.too-much-nothing
+NB_ID=io.github.lutzlstein.too-much-nothing
 NB_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/$NB_ID
 NB_MANIFEST=$NB_STATE_DIR/manifest
 NB_BACKUP_DIR=$NB_STATE_DIR/backup

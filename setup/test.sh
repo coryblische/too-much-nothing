@@ -305,7 +305,7 @@ for f in bluetoothctl systemctl yay pacman pactl git rustup; do
   /usr/bin/chmod 755 "$FAKE/$f"
 done
 
-manifest_of() { echo "$H/.local/state/io.github.coryblische.too-much-nothing/manifest"; }
+manifest_of() { echo "$H/.local/state/io.github.lutzlstein.too-much-nothing/manifest"; }
 
 # ============================================================= scenarios
 
@@ -317,7 +317,7 @@ rc=$?
 assert_rc "no --yes, non-tty" 4 "$rc"
 assert_gone "wrapper" "$H/.local/bin/tmn"
 assert_gone "unit" "$H/.config/systemd/user/tmn-earctl.service"
-assert_gone "state dir" "$H/.local/state/io.github.coryblische.too-much-nothing"
+assert_gone "state dir" "$H/.local/state/io.github.lutzlstein.too-much-nothing"
 assert_no_line "no systemctl calls" "systemctl" "$FAKE/log"
 
 step "S1b: declined consent in a terminal, nothing touched"
@@ -344,7 +344,7 @@ assert_eq "pinned address" "$(/usr/bin/cat "$H/.config/too-much-nothing/address"
 assert_line "unit execs the resolved earctl" \
   "^ExecStart=$FAKE/earctl server --addr 127.0.0.1:8797\$" "$H/.config/systemd/user/tmn-earctl.service"
 assert_no_line "no placeholder left in the unit" "%EARCTL%" "$H/.config/systemd/user/tmn-earctl.service"
-assert_eq "earctl-bin records the existing dependency path" "$(/usr/bin/cat "$H/.local/state/io.github.coryblische.too-much-nothing/earctl-bin")" "$FAKE/earctl"
+assert_eq "earctl-bin records the existing dependency path" "$(/usr/bin/cat "$H/.local/state/io.github.lutzlstein.too-much-nothing/earctl-bin")" "$FAKE/earctl"
 M=$(manifest_of)
 assert_line "manifest records wrapper" "file$(/usr/bin/printf '\t')$H/.local/bin/tmn" "$M"
 assert_line "manifest records unit" "file$(/usr/bin/printf '\t')$H/.config/systemd/user/tmn-earctl.service" "$M"
@@ -362,7 +362,7 @@ assert_rc "uninstall" 0 "$rc"
 assert_gone "wrapper" "$H/.local/bin/tmn"
 assert_gone "unit" "$H/.config/systemd/user/tmn-earctl.service"
 assert_gone "config dir (we created it, now empty)" "$H/.config/too-much-nothing"
-assert_gone "state dir" "$H/.local/state/io.github.coryblische.too-much-nothing"
+assert_gone "state dir" "$H/.local/state/io.github.lutzlstein.too-much-nothing"
 assert_exists "pre-existing earctl untouched" "$FAKE/earctl"
 assert_line "service stopped" "systemctl --user disable --now tmn-earctl.service" "$FAKE/log"
 assert_no_line "no package-manager removal" "-Rns" "$FAKE/log"
@@ -377,7 +377,7 @@ rc=$?
 assert_rc "earctl missing, non-tty" 2 "$rc"
 assert_gone "wrapper not installed" "$H/.local/bin/tmn"
 assert_gone "unit not installed" "$H/.config/systemd/user/tmn-earctl.service"
-assert_gone "state dir rolled back" "$H/.local/state/io.github.coryblische.too-much-nothing"
+assert_gone "state dir rolled back" "$H/.local/state/io.github.lutzlstein.too-much-nothing"
 
 step "S5: interactive install builds pinned source even with yay available"
 new_home
@@ -388,24 +388,24 @@ rc=$?
 assert_rc "consented terminal install" 0 "$rc"
 assert_exists "wrapper" "$H/.local/bin/tmn"
 assert_exists "unit" "$H/.config/systemd/user/tmn-earctl.service"
-assert_exists "built earctl" "$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl"
+assert_exists "built earctl" "$H/.local/share/io.github.lutzlstein.too-much-nothing/bin/earctl"
 M=$(manifest_of)
-assert_line "manifest records the binary" "file$(printf '\t')$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl" "$M"
+assert_line "manifest records the binary" "file$(printf '\t')$H/.local/share/io.github.lutzlstein.too-much-nothing/bin/earctl" "$M"
 assert_no_line "no package ownership recorded" "^pkg" "$M"
 assert_no_line "yay never invoked despite being available" "yay" "$FAKE/log"
 assert_line "exact commit fetched" "fetch -q --depth 1 origin 1315bfbf07eb74b946606e30ede2d4290449082f" "$FAKE/log"
 assert_line "detached checkout" "checkout -q --detach 1315bfbf07eb74b946606e30ede2d4290449082f" "$FAKE/log"
 assert_line "HEAD verified" "rev-parse HEAD" "$FAKE/log"
 assert_line "locked build through the Cargo proxy" "cargo build --release --locked" "$FAKE/log"
-assert_eq "earctl-bin records built binary" "$(/usr/bin/cat "$H/.local/state/io.github.coryblische.too-much-nothing/earctl-bin")" "$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl"
-assert_line "unit uses built binary" "^ExecStart=$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl server" "$H/.config/systemd/user/tmn-earctl.service"
+assert_eq "earctl-bin records built binary" "$(/usr/bin/cat "$H/.local/state/io.github.lutzlstein.too-much-nothing/earctl-bin")" "$H/.local/share/io.github.lutzlstein.too-much-nothing/bin/earctl"
+assert_line "unit uses built binary" "^ExecStart=$H/.local/share/io.github.lutzlstein.too-much-nothing/bin/earctl server" "$H/.config/systemd/user/tmn-earctl.service"
 
 step "S5a: a plugin-built earctl from an older pin is rebuilt, a user's is not"
-assert_eq "build commit recorded" "$(/usr/bin/cat "$H/.local/state/io.github.coryblische.too-much-nothing/earctl-commit")" "1315bfbf07eb74b946606e30ede2d4290449082f"
+assert_eq "build commit recorded" "$(/usr/bin/cat "$H/.local/state/io.github.lutzlstein.too-much-nothing/earctl-commit")" "1315bfbf07eb74b946606e30ede2d4290449082f"
 run_install --check
 assert_rc "check passes on the pinned build" 0 "$?"
 # An install from before 0.0.7 never recorded the build commit at all.
-/usr/bin/rm -f -- "$H/.local/state/io.github.coryblische.too-much-nothing/earctl-commit"
+/usr/bin/rm -f -- "$H/.local/state/io.github.lutzlstein.too-much-nothing/earctl-commit"
 run_install --check
 assert_rc "check reports a stale build" 1 "$?"
 log_reset
@@ -416,7 +416,7 @@ log_reset
 run_pty install.sh
 assert_rc "terminal setup rebuilds" 0 "$?"
 assert_line "rebuilt from the pin" "fetch -q --depth 1 origin 1315bfbf07eb74b946606e30ede2d4290449082f" "$FAKE/log"
-assert_eq "build commit updated" "$(/usr/bin/cat "$H/.local/state/io.github.coryblische.too-much-nothing/earctl-commit")" "1315bfbf07eb74b946606e30ede2d4290449082f"
+assert_eq "build commit updated" "$(/usr/bin/cat "$H/.local/state/io.github.lutzlstein.too-much-nothing/earctl-commit")" "1315bfbf07eb74b946606e30ede2d4290449082f"
 run_install --check
 assert_rc "check passes after the rebuild" 0 "$?"
 
@@ -424,9 +424,9 @@ step "S5b: uninstall removes the recorded binary; --keep-earctl keeps it"
 log_reset
 run_uninstall --yes
 assert_rc "uninstall with built binary" 0 "$?"
-assert_gone "earctl binary removed" "$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl"
+assert_gone "earctl binary removed" "$H/.local/share/io.github.lutzlstein.too-much-nothing/bin/earctl"
 assert_no_line "no package manager invoked" "yay" "$FAKE/log"
-assert_gone "state dir" "$H/.local/state/io.github.coryblische.too-much-nothing"
+assert_gone "state dir" "$H/.local/state/io.github.lutzlstein.too-much-nothing"
 
 new_home
 log_reset
@@ -435,7 +435,7 @@ assert_rc "second terminal install" 0 "$?"
 log_reset
 run_uninstall --yes --keep-earctl
 assert_rc "uninstall keeping earctl" 0 "$?"
-assert_exists "earctl kept" "$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl"
+assert_exists "earctl kept" "$H/.local/share/io.github.lutzlstein.too-much-nothing/bin/earctl"
 assert_no_line "no package removal attempted" "-Rns" "$FAKE/log"
 
 step "S5c: source failures abort without publishing files or falling back to yay"
@@ -449,10 +449,10 @@ for failure in git-fail git-wrong-head cargo-fail systemctl-fail-enable; do
   expected=2
   [[ $failure != systemctl-fail-enable ]] || expected=6
   assert_rc "$failure aborts install" "$expected" "$rc"
-  assert_gone "$failure leaves no binary" "$H/.local/share/io.github.coryblische.too-much-nothing/bin/earctl"
+  assert_gone "$failure leaves no binary" "$H/.local/share/io.github.lutzlstein.too-much-nothing/bin/earctl"
   assert_gone "$failure leaves no wrapper" "$H/.local/bin/tmn"
   assert_gone "$failure leaves no unit" "$H/.config/systemd/user/tmn-earctl.service"
-  assert_gone "$failure rolls state back" "$H/.local/state/io.github.coryblische.too-much-nothing"
+  assert_gone "$failure rolls state back" "$H/.local/state/io.github.lutzlstein.too-much-nothing"
   assert_no_line "$failure never falls back to yay" "yay" "$FAKE/log"
   if [[ $failure == git-* ]]; then
     assert_no_line "$failure never runs Cargo" "cargo" "$FAKE/log"
@@ -504,9 +504,9 @@ assert_rc "replace-existing proceeds" 0 "$rc"
 assert_line "unit now ours (rendered)" \
   "^ExecStart=$FAKE/earctl server --addr 127.0.0.1:8797\$" "$H/.config/systemd/user/tmn-earctl.service"
 assert_exists "old copy backed up" \
-  "$H/.local/state/io.github.coryblische.too-much-nothing/backup/tmn-earctl.service"
+  "$H/.local/state/io.github.lutzlstein.too-much-nothing/backup/tmn-earctl.service"
 assert_eq "backup holds the foreign content" \
-  "$(/usr/bin/cat "$H/.local/state/io.github.coryblische.too-much-nothing/backup/tmn-earctl.service")" "foreign unit"
+  "$(/usr/bin/cat "$H/.local/state/io.github.lutzlstein.too-much-nothing/backup/tmn-earctl.service")" "foreign unit"
 
 step "S8: pre-existing config dir with a foreign file is respected"
 new_home
@@ -540,7 +540,7 @@ assert_gone "wrapper rolled back" "$H/.local/bin/tmn"
 assert_gone "unit rolled back" "$H/.config/systemd/user/tmn-earctl.service"
 assert_gone "address rolled back" "$H/.config/too-much-nothing/address"
 assert_gone "config dir rolled back" "$H/.config/too-much-nothing"
-assert_gone "state dir rolled back" "$H/.local/state/io.github.coryblische.too-much-nothing"
+assert_gone "state dir rolled back" "$H/.local/state/io.github.lutzlstein.too-much-nothing"
 assert_line "disable ran after failed enable" "systemctl --user disable tmn-earctl.service" "$FAKE/log"
 assert_exists "pre-existing earctl untouched" "$FAKE/earctl"
 
@@ -556,7 +556,7 @@ M=$(manifest_of)
 assert_eq "no duplicate wrapper record" \
   "$(/usr/bin/grep -c "file$(printf '\t')$H/.local/bin/tmn$(printf '\t')" "$M")" "1"
 assert_exists "backup of first wrapper" \
-  "$H/.local/state/io.github.coryblische.too-much-nothing/backup/tmn"
+  "$H/.local/state/io.github.lutzlstein.too-much-nothing/backup/tmn"
 
 step "S11: uninstall refuses a wrapper the user has modified"
 log_reset
@@ -768,7 +768,7 @@ log_reset
 make_earctl
 run_check
 assert_rc "fresh home is not set up" 1 "$?"
-assert_gone "--check created no state dir" "$H/.local/state/io.github.coryblische.too-much-nothing"
+assert_gone "--check created no state dir" "$H/.local/state/io.github.lutzlstein.too-much-nothing"
 assert_gone "--check created no wrapper" "$H/.local/bin/tmn"
 assert_no_line "--check ran no systemctl" "systemctl" "$FAKE/log"
 
@@ -813,11 +813,11 @@ assert_rc "upgrade install" 0 "$rc"
 assert_eq "wrapper replaced with the current one" \
   "$(/usr/bin/cmp -s "$H/.local/bin/tmn" "$SUBJ/tmn" && echo same)" "same"
 assert_eq "legacy wrapper backed up" \
-  "$(/usr/bin/cmp -s "$H/.local/state/io.github.coryblische.too-much-nothing/backup/tmn" "$FAKE/legacy-earbuds" && echo same)" "same"
+  "$(/usr/bin/cmp -s "$H/.local/state/io.github.lutzlstein.too-much-nothing/backup/tmn" "$FAKE/legacy-earbuds" && echo same)" "same"
 assert_line "unit re-rendered" \
   "^ExecStart=$FAKE/earctl server --addr 127.0.0.1:8797\$" "$H/.config/systemd/user/tmn-earctl.service"
 assert_eq "legacy unit backed up" \
-  "$(/usr/bin/cmp -s "$H/.local/state/io.github.coryblische.too-much-nothing/backup/tmn-earctl.service" "$FAKE/legacy-unit" && echo same)" "same"
+  "$(/usr/bin/cmp -s "$H/.local/state/io.github.lutzlstein.too-much-nothing/backup/tmn-earctl.service" "$FAKE/legacy-unit" && echo same)" "same"
 assert_eq "user's pinned address untouched" "$(/usr/bin/cat "$H/.config/too-much-nothing/address")" "11:22:33:44:55:66"
 M=$(manifest_of)
 assert_line "config dir recorded as pre-existing" "pre$(printf '\t')$H/.config/too-much-nothing" "$M"
@@ -852,7 +852,7 @@ log_reset
 make_earctl
 run_install --yes
 assert_rc "install for discovery" 0 "$?"
-STATE_CH=$H/.local/state/io.github.coryblische.too-much-nothing/channels/AA_BB_CC_DD_EE_FF
+STATE_CH=$H/.local/state/io.github.lutzlstein.too-much-nothing/channels/AA_BB_CC_DD_EE_FF
 echo 15 >"$FAKE/works-on-channel"
 echo yes >"$FAKE/bt-connected"
 
@@ -930,7 +930,7 @@ log_reset
 run_uninstall --yes
 assert_rc "uninstall after discovery" 0 "$?"
 assert_gone "discovered channel removed" "$STATE_CH"
-assert_gone "state dir removed" "$H/.local/state/io.github.coryblische.too-much-nothing"
+assert_gone "state dir removed" "$H/.local/state/io.github.lutzlstein.too-much-nothing"
 /usr/bin/rm -f -- "$FAKE/works-on-channel" "$FAKE/last-channel" "$FAKE/bt-connected"
 
 step "S18: config and state files are read through one no-follow, non-blocking descriptor"
@@ -975,7 +975,7 @@ assert_eq "PERL5OPT cannot inject code" \
   "$(PERL5OPT=-Mstrict=bogus read_lib "$R/line" 64)" "0:AA:BB:CC:DD:EE:FF"
 # The recorded earctl path is not read through a symlink either.
 new_home
-S=$H/.local/state/io.github.coryblische.too-much-nothing
+S=$H/.local/state/io.github.lutzlstein.too-much-nothing
 /usr/bin/mkdir -p -- "$S" "$H/.config/too-much-nothing"
 printf '%s\n' "$FAKE/evil-earctl" >"$T/evil-bin"
 /usr/bin/ln -s -- "$T/evil-bin" "$S/earctl-bin"
@@ -1028,7 +1028,7 @@ log_reset
 run_install --yes
 assert_rc "install with two buds paired" 0 "$?"
 assert_gone "no address pinned when several buds are paired" "$H/.config/too-much-nothing/address"
-SD=$H/.local/state/io.github.coryblische.too-much-nothing
+SD=$H/.local/state/io.github.lutzlstein.too-much-nothing
 
 # list: both buds, nothing else, link state per address.
 echo no >"$MD/conn-$A"
@@ -1206,7 +1206,7 @@ echo "keep" >"$T/imp-victim"
 /usr/bin/ln -s -- "$T/imp-victim" "$U/channel"
 run_install --yes
 assert_rc "install with upstream state present" 0 "$?"
-SD=$H/.local/state/io.github.coryblische.too-much-nothing
+SD=$H/.local/state/io.github.lutzlstein.too-much-nothing
 assert_eq "pick imported" "$(/usr/bin/cat "$SD/selected")" "AA:BB:CC:DD:EE:02"
 assert_eq "valid channel imported" "$(/usr/bin/cat "$SD/channels/AA_BB_CC_DD_EE_01")" "15"
 assert_gone "out-of-range channel skipped" "$SD/channels/AA_BB_CC_DD_EE_02"

@@ -17,7 +17,7 @@ import "Model.js" as Model
 // capped output, watchdog so busy/link state cannot wedge).
 Panel {
   id: root
-  moduleName: "io.github.coryblische.too-much-nothing"
+  moduleName: "io.github.lutzlstein.too-much-nothing"
   manageIpc: false
 
   property var anchorItem: null
@@ -38,11 +38,11 @@ Panel {
   readonly property string homeDir: Quickshell.env("HOME") || ""
   readonly property string stateDir:
     (Quickshell.env("XDG_STATE_HOME") || homeDir + "/.local/state")
-    + "/io.github.coryblische.too-much-nothing"
+    + "/io.github.lutzlstein.too-much-nothing"
   readonly property string earbudsBin: homeDir + "/.local/bin/tmn"
   readonly property string earctlLocal:
     (Quickshell.env("XDG_DATA_HOME") || homeDir + "/.local/share")
-    + "/io.github.coryblische.too-much-nothing/bin/earctl"
+    + "/io.github.lutzlstein.too-much-nothing/bin/earctl"
   readonly property string earctlUsr: "/usr/bin/earctl"
   // Omarchy's own launcher; /usr/share/omarchy/bin holds a symlink to it.
   readonly property string launchTui: "/usr/bin/omarchy-launch-tui"

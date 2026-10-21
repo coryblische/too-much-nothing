@@ -41,10 +41,10 @@ NB_MKDIR=/usr/bin/mkdir
 NB_MV=/usr/bin/mv
 NB_RM=/usr/bin/rm
 NB_EARCTL_FALLBACK=/usr/bin/earctl
-NB_EARCTL_LOCAL=${XDG_DATA_HOME:-$HOME/.local/share}/io.github.coryblische.too-much-nothing/bin/earctl
+NB_EARCTL_LOCAL=${XDG_DATA_HOME:-$HOME/.local/share}/io.github.lutzlstein.too-much-nothing/bin/earctl
 # This plugin's earctl server, apart from any other on the default 8787.
 NB_ENDPOINT=http://127.0.0.1:8797
-NB_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/io.github.coryblische.too-much-nothing
+NB_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/io.github.lutzlstein.too-much-nothing
 NB_EARCTL_BIN_FILE=$NB_STATE_DIR/earctl-bin
 # Channel found by `discover-channel`, one file per address
 # (AA_BB_CC_DD_EE_FF). Ours, so uninstall removes them.

@@ -56,7 +56,7 @@ or adjust with full knowledge of that fact.
 ## Install
 
 ```sh
-omarchy plugin add https://github.com/coryblische/too-much-nothing.git --enable
+omarchy plugin add https://github.com/lutzlstein/too-much-nothing.git --enable
 ```
 
 **Setup only ever runs from a click.** Enabling the plugin never modifies
@@ -86,7 +86,7 @@ Missing earctl is always built from commit
 Setup fetches that exact commit, checks it out detached, verifies HEAD, and
 runs `cargo build --release --locked` so dependency resolution must match the
 committed lockfile. The binary goes into
-`~/.local/share/io.github.coryblische.too-much-nothing/bin/earctl`, never
+`~/.local/share/io.github.lutzlstein.too-much-nothing/bin/earctl`, never
 `~/.local/bin`, and the commit
 is recorded next to the manifest. When a later version of this plugin moves
 the pin, setup sees the recorded commit no longer matches and rebuilds, in a
@@ -99,7 +99,7 @@ update it yourself.
 
 Every file is written by temp file and rename, never through a symlink,
 recorded in a manifest at
-`~/.local/state/io.github.coryblische.too-much-nothing/`, and backed up before
+`~/.local/state/io.github.lutzlstein.too-much-nothing/`, and backed up before
 replacement. A pre-existing file counts as ours only when the manifest
 records it or it is byte-identical to a version this plugin ships or has
 shipped. Anything else is refused with exit 5 rather than overwritten.
@@ -119,7 +119,7 @@ consent not given · `5` pre-existing object refused · `6` operational failure
 You can also run the installer directly:
 
 ```sh
-~/.config/omarchy/plugins/io.github.coryblische.too-much-nothing/setup/install.sh
+~/.config/omarchy/plugins/io.github.lutzlstein.too-much-nothing/setup/install.sh
 ```
 
 Run by hand it prints its plan and asks before proceeding, and installs earctl
@@ -137,8 +137,8 @@ touches that folder. To remove Nothing Buds entirely, run its own
 ## Uninstall
 
 ```sh
-~/.config/omarchy/plugins/io.github.coryblische.too-much-nothing/setup/uninstall.sh
-omarchy plugin remove io.github.coryblische.too-much-nothing
+~/.config/omarchy/plugins/io.github.lutzlstein.too-much-nothing/setup/uninstall.sh
+omarchy plugin remove io.github.lutzlstein.too-much-nothing
 ```
 
 Run them in that order. `omarchy plugin remove` deletes the plugin folder and
@@ -188,7 +188,7 @@ panel shows a picker under the header. The panel controls one pair at a time,
 because earctl keeps a single RFCOMM session. Without a pick it follows the
 pair that is connected. Picking a pair links it if it is not linked, and the
 session moves to it on the next read. The pick is kept in
-`~/.local/state/io.github.coryblische.too-much-nothing/selected`, and it
+`~/.local/state/io.github.lutzlstein.too-much-nothing/selected`, and it
 outranks `~/.config/too-much-nothing/address`, which only names a default. From a terminal:
 
 ```sh
@@ -205,7 +205,7 @@ To pin per-widget instead, add keys to this widget's entry in
 `~/.config/omarchy/shell.json`:
 
 ```json
-{ "id": "io.github.coryblische.too-much-nothing", "address": "AA:BB:CC:DD:EE:FF", "channel": 16 }
+{ "id": "io.github.lutzlstein.too-much-nothing", "address": "AA:BB:CC:DD:EE:FF", "channel": 16 }
 ```
 
 The panel validates these too and shows "Ignoring invalid address/channel in
@@ -235,7 +235,7 @@ to 30, and accepts only a channel that returns a battery reading. Accepting
 the link is not proof. On my CMF Buds 2 five channels opened and four of them
 stayed quiet. The panel shows which channel it is trying, then "Found your
 earbuds on channel N". The answer is remembered per device in
-`~/.local/state/io.github.coryblische.too-much-nothing/channels/`, one file
+`~/.local/state/io.github.lutzlstein.too-much-nothing/channels/`, one file
 named after the address, so CMF Buds 2 and an Ear (3) each keep their own.
 The wrapper reads it after `~/.config/too-much-nothing/channel`, and uninstall removes
 it.
@@ -273,7 +273,7 @@ reviewed itself.
 |---|---|
 | Dependency installation must use the reviewed source | Missing earctl is built only from the full commit above, with detached checkout and HEAD verification before Cargo runs. `--locked` requires the committed dependency lockfile. The built commit is recorded, so a moved pin rebuilds rather than keeping an older binary. There is no AUR installation path. S5, S5a, S5c |
 | Setup must be an explicit, consented action; no overwriting objects the plugin cannot prove it owns | Setup runs only from the panel's "Set up" click (`--yes`) or a y/N prompt in a terminal. `setup/lib.sh` installs through `nb_install_file`: symlinked targets are refused, pre-existing files are refused unless recorded in the manifest or byte-identical to a version shipped here, replaced files are backed up, and everything is published by atomic rename. The panel only ever probes with `install.sh --check`, which is read-only. `bash setup/test.sh` S1, S6, S7, S9, S15, S16 |
-| Uninstall must remove only what this installation created | A manifest at `~/.local/state/io.github.coryblische.too-much-nothing/` records every file, directory and package created. Removal is hash-checked, symlink-checked, empty-dir-only, and never recurses by inference. Legacy installs get content-matching only. S3, S8, S11, S12 |
+| Uninstall must remove only what this installation created | A manifest at `~/.local/state/io.github.lutzlstein.too-much-nothing/` records every file, directory and package created. Removal is hash-checked, symlink-checked, empty-dir-only, and never recurses by inference. Legacy installs get content-matching only. S3, S8, S11, S12 |
 | Helper calls need deadlines and output caps; a hung or noisy helper must not wedge the panel | Every wrapper call is wrapped in `/usr/bin/timeout` with byte caps on consumed output, and each helper runs in its own process group so a forked grandchild dies with it; the panel wraps every operation in `/usr/bin/timeout --kill-after=5 <deadline>`, streams stdout/stderr through capped parsers, and a watchdog plus supersession rules guarantee `busy`/link state always clears. Channel discovery is a fixed list of bounded probes, writes only inside the plugin's own state directory by temp file and rename, and refuses a symlink there. S13, S17 |
 | Executable identity and input boundaries must not be steerable | All binaries are invoked by absolute path; the `EARCTL`/`EARBUDS_ADDR`/`EARBUDS_CHANNEL` overrides are removed; the panel passes overrides as validated arguments; config and state files are opened once with `O_NOFOLLOW\|O_NONBLOCK`, checked with `fstat` on that same descriptor and read with a byte cap, so a swapped-in symlink or FIFO is refused rather than followed or waited on; they are validated against a Bluetooth-address grammar before use. S14 |
 

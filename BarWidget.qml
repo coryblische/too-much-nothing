@@ -8,7 +8,7 @@ import "Model.js" as Model
 // the slot, so it owns the button and forwards the complete panel lifecycle.
 Ui.BarWidget {
   id: root
-  moduleName: "io.github.coryblische.too-much-nothing"
+  moduleName: "io.github.lutzlstein.too-much-nothing"
 
   readonly property bool opened: panelLoader.item
     ? panelLoader.item.opened === true
