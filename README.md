@@ -7,7 +7,7 @@ Forked from [Nothing Buds](https://github.com/SaiAungMinKhant/omarchy-nothing-bu
 by Sai Aung Min Khant, which stays the lean, earbuds-only plugin. This fork
 grows it into more of a suite. Fixes that belong upstream go upstream.
 
-<img src="preview.png" alt="The panel on a dark and a light Omarchy theme" width="720">
+<img src="preview.png" alt="The panel with the earbuds switcher, codec choice and system audio controls" width="428">
 
 The panel follows your Omarchy theme. Both shots are the same build, on CMF
 Buds 2.
